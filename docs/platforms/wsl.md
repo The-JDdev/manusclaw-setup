@@ -1,4 +1,4 @@
-# WSL2 Guide — ManusClaw v4.0.0
+# WSL2 Guide — ManusClaw v5.0.0
 
 Windows Subsystem for Linux version 2 (WSL2) provides a full Linux kernel running inside Windows, making it the best way to run ManusClaw on a Windows machine. WSL2 eliminates virtually all Windows-specific compatibility issues while giving you seamless access to your Windows files and tools. This guide covers everything from installing WSL2 to optimizing it for ManusClaw.
 
@@ -236,7 +236,7 @@ Windows Terminal provides a much better experience than the default command prom
 
 ## Installing ManusClaw on WSL2
 
-With WSL2 set up, installing ManusClaw follows the standard Linux installation process.
+With WSL2 set up, installing ManusClaw follows the standard Linux installation process. ManusClaw v5.0.0 requires **Python 3.11+**.
 
 ### Step 1: Install Python 3.11+
 
@@ -494,15 +494,15 @@ xeyes
 
 WSL2 has its own IP address and network stack, but Windows automatically forwards ports from WSL2 to the host. This means:
 
-- A server running in WSL2 on port 8000 is automatically accessible at `localhost:8000` on Windows
-- You can access the ManusClaw server from your Windows browser
+- A server running in WSL2 on port 8765 is automatically accessible at `localhost:8765` on Windows
+- You can access the ManusClaw v5 server from your Windows browser
 - Other devices on your network can access it via your Windows IP address
 
 ### Starting the ManusClaw server
 
 ```bash
-# In WSL2
-manusclaw-server --host 0.0.0.0 --port 8000
+# In WSL2 — v5 default port is 8765
+manusclaw-server --host 0.0.0.0 --port 8765
 ```
 
 ### Accessing from Windows
@@ -510,7 +510,7 @@ manusclaw-server --host 0.0.0.0 --port 8000
 Open your Windows browser and go to:
 
 ```
-http://localhost:8000/health
+http://localhost:8765/health
 ```
 
 ### Accessing from other devices on your network
@@ -527,13 +527,13 @@ ipconfig
 
 ```powershell
 # In PowerShell (as Administrator)
-New-NetFirewallRule -DisplayName "ManusClaw" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "ManusClaw" -Direction Inbound -LocalPort 8765 -Protocol TCP -Action Allow
 ```
 
 3. Access from another device:
 
 ```
-http://your-windows-ip:8000/health
+http://your-windows-ip:8765/health
 ```
 
 ### Port forwarding issues
@@ -546,13 +546,13 @@ Sometimes WSL2's automatic port forwarding doesn't work. If you can't access a W
 wsl hostname -I
 
 # Manually forward the port
-netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$(wsl hostname -I)
+netsh interface portproxy add v4tov4 listenport=8765 listenaddress=0.0.0.0 connectport=8765 connectaddress=$(wsl hostname -I)
 ```
 
 To remove the forwarding:
 
 ```powershell
-netsh interface portproxy delete v4tov4 listenport=8000 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=8765 listenaddress=0.0.0.0
 ```
 
 ---
@@ -576,13 +576,14 @@ VS Code will open with a "WSL: Ubuntu" indicator in the bottom-left corner, mean
 
 ### Docker Desktop
 
-Docker Desktop for Windows uses WSL2 as its backend:
+Docker Desktop for Windows uses WSL2 as its backend. This is the recommended way to use Docker with ManusClaw v5's multi-profile compose files:
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. In Docker Desktop settings → General → "Use the WSL 2 based engine" (should be enabled by default)
 3. Under Resources → WSL Integration → Enable integration for your distribution
+4. Ensure **Compose V2** is enabled (Docker Desktop enables this by default)
 
-Now you can use Docker from both Windows and WSL2:
+Now you can use Docker from both Windows and WSL2. v5's profile-based compose files work seamlessly:
 
 ```bash
 # In WSL2
@@ -687,6 +688,69 @@ sudo systemctl start manusclaw
 
 ---
 
+## Audio Device Passthrough (v5 Voice Features)
+
+ManusClaw v5.0.0 includes voice features (wake word, talk mode) that require microphone and speaker access. WSL2 has limited audio support, but it can work with configuration.
+
+### Checking audio devices
+
+```bash
+# List audio devices visible to WSL2
+python3 -c "import pyaudio; p = pyaudio.PyAudio(); [print(f'{i}: {p.get_device_info_by_index(i)[\"name\"]}') for i in range(p.get_device_count())]"
+```
+
+### Option 1: Windows 11 with WSLg audio (limited)
+
+Windows 11's WSLg includes basic audio support. If PulseAudio devices are visible, voice features may work out of the box:
+
+```bash
+# Install PortAudio development libraries
+sudo apt install -y portaudio19-dev
+pip install pyaudio
+
+# Test
+manusclaw voice talk --start
+```
+
+### Option 2: PulseAudio server (recommended for voice)
+
+For reliable audio in WSL2, run a PulseAudio server on Windows and connect WSL2 to it:
+
+1. **Install PulseAudio for Windows:** Download from [freedesktop.org](https://www.freedesktop.org/wiki/Software/PulseAudio/Ports/Windows/Support/)
+
+2. **Configure WSL2 to use the Windows PulseAudio server:**
+   ```bash
+   echo 'export PULSE_SERVER=tcp:$(cat /etc/resolv.conf | grep nameserver | awk "{print $2}")' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+3. **Install audio dependencies:**
+   ```bash
+   sudo apt install -y portaudio19-dev pulseaudio-utils
+   pip install pyaudio
+   ```
+
+4. **Test audio:**
+   ```bash
+   # Check if PulseAudio is reachable
+   pactl info
+   ```
+
+### Option 3: USB microphone passthrough
+
+If using a USB microphone:
+
+1. Plug in the USB microphone to your Windows machine
+2. In PowerShell, check it's recognized:
+   ```powershell
+   Get-PnpDevice -Class Audio
+   ```
+3. WSL2 should see the device through PulseAudio (if configured above)
+
+> **Note:** Voice features are best experienced on native Linux or macOS. WSL2 audio is a work in progress and may have latency or compatibility issues.
+
+---
+
 ## Troubleshooting WSL2 Issues
 
 ### Error: `WslRegisterDistribution failed with error: 0x8007019e`
@@ -760,6 +824,8 @@ sudo cp /etc/resolv.conf /etc/resolv.conf.backup
 # Create a custom resolv.conf
 echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
 echo "nameserver 8.8.4.4" | sudo tee -a /etc/resolv.conf
+
+> **Note:** If you're running ManusClaw v5 with Gmail Pub/Sub or webhook endpoints that need inbound connections, ensure DNS is working correctly.
 
 # Prevent WSL from overwriting it
 sudo chattr +i /etc/resolv.conf
@@ -857,6 +923,9 @@ wsl --set-default Ubuntu-22.04
 
 # Run a specific command in WSL
 wsl -- bash -c "manusclaw --version"
+
+# Check v5 server status
+wsl -- bash -c "curl -s http://localhost:8765/health"
 
 # Export a distribution (backup)
 wsl --export Ubuntu-22.04 D:\backup\ubuntu-backup.tar

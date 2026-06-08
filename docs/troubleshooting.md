@@ -1,4 +1,4 @@
-# Troubleshooting Guide — ManusClaw v4.0.0
+# Troubleshooting Guide — ManusClaw v5.0.0
 
 This guide covers the most common issues you might encounter when installing, configuring, or running ManusClaw. Each problem includes a detailed explanation of the root cause and step-by-step solutions. If your issue isn't covered here, please open a GitHub issue with the details of your environment and the error message you're seeing.
 
@@ -12,6 +12,13 @@ This guide covers the most common issues you might encounter when installing, co
 - [API Key Configuration Problems](#api-key-configuration-problems)
 - [Ollama Connection Issues](#ollama-connection-issues)
 - [Playwright Browser Issues](#playwright-browser-issues)
+- [Voice & Audio Issues (v5)](#voice--audio-issues-v5)
+- [SSH Gateway Issues (v5)](#ssh-gateway-issues-v5)
+- [Channel Adapter Issues (v5)](#channel-adapter-issues-v5)
+- [Webhook Issues (v5)](#webhook-issues-v5)
+- [Model Failover Issues (v5)](#model-failover-issues-v5)
+- [Credential Pool Issues (v5)](#credential-pool-issues-v5)
+- [Gmail Pub/Sub Issues (v5)](#gmail-pubsub-issues-v5)
 - [Permission Denied Errors](#permission-denied-errors)
 - [Memory / Database Errors](#memory--database-errors)
 - [Network / Firewall Issues](#network--firewall-issues)
@@ -129,22 +136,23 @@ Install the necessary build tools:
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt install -y build-essential python3-dev libssl-dev libffi-dev
+sudo apt install -y build-essential python3-dev libssl-dev libffi-dev portaudio19-dev
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install -y gcc gcc-c++ python3-devel openssl-devel libffi-devel
+sudo dnf install -y gcc gcc-c++ python3-devel openssl-devel libffi-devel portaudio-devel
 ```
 
 **macOS:**
 ```bash
 xcode-select --install
+brew install portaudio
 ```
 
 **Arch:**
 ```bash
-sudo pacman -S --needed base-devel python python-pip
+sudo pacman -S --needed base-devel python python-pip portaudio
 ```
 
 After installing the build tools, retry:
@@ -168,7 +176,7 @@ python3 --version
 python --version
 ```
 
-If either shows Python 3.10 or older, you need to upgrade.
+If either shows Python 3.10 or older, you need to upgrade. ManusClaw v5.0.0 requires **Python 3.11+**.
 
 **Solution:**
 
@@ -330,7 +338,7 @@ grep -A5 "\[llm.openai\]" ~/.manusclaw/config.toml
 1. Check your billing status at [platform.openai.com/account/billing](https://platform.openai.com/account/billing)
 2. Add billing information if you haven't already
 3. Wait if you've hit a usage limit (limits reset periodically)
-4. Use a different provider or add more API keys to the credential pool
+4. Use a different provider or add more API keys to the credential pool (see [Credential Pool Issues](#credential-pool-issues-v5))
 
 ### Error: Provider-specific key format issues
 
@@ -344,6 +352,7 @@ Each provider has a different API key format:
 | Mistral | No prefix, 32+ chars | `abc123def456...` |
 | HuggingFace | `hf_...` | `hf_abc123def456...` |
 | OpenRouter | `sk-or-...` | `sk-or-v1-abc123...` |
+| Groq | `gsk_...` | `gsk_abc123...` |
 
 If your key doesn't match the expected format, double-check that you copied it correctly from the provider's dashboard.
 
@@ -513,6 +522,487 @@ FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 ```toml
 [search]
 engine = "duckduckgo"
+```
+
+---
+
+## Voice & Audio Issues (v5)
+
+### Error: Voice features not working — `No module named 'pyaudio'`
+
+**Symptom:** `manusclaw voice wake` or `manusclaw voice talk` fails with a PyAudio import error.
+
+**Root Cause:** PyAudio requires PortAudio system libraries, which are not installed by default.
+
+**Solution:**
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install -y portaudio19-dev
+pip install pyaudio
+```
+
+**macOS:**
+```bash
+brew install portaudio
+pip install pyaudio
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install -y portaudio-devel
+pip install pyaudio
+```
+
+**WSL2:** See the [WSL2 Guide](platforms/wsl.md) for audio device passthrough notes.
+
+### Error: Porcupine wake word not detected
+
+**Symptom:** `manusclaw voice wake` starts but never detects the wake word.
+
+**Diagnosis:**
+
+1. **Check if Porcupine key is set:**
+   ```bash
+   echo $PICOVOICE_API_KEY
+   ```
+
+2. **Check the log output for which backend is active:**
+   ```bash
+   manusclaw voice wake --start --word "hey manus" --debug
+   ```
+
+**Solutions:**
+
+- **Without a Porcupine key:** The system falls back to Google STT, which has ~2s latency and requires internet. It uses substring matching on audio transcripts.
+- **With a Porcupine key but not detecting:** Try increasing sensitivity:
+  ```bash
+  manusclaw voice wake --start --word "hey manus" --sensitivity 0.9
+  ```
+- **Custom wake word not supported:** Porcupine supports custom keywords via the Picovoice console. Google STT fallback supports any phrase.
+
+### Error: `OSError: [Errno -9998] Invalid number of channels` or no audio input
+
+**Symptom:** PyAudio fails to open the microphone.
+
+**Root Cause:** The default audio input device is not accessible or doesn't support the required format.
+
+**Solutions:**
+
+```bash
+# List available audio devices
+python3 -c "import pyaudio; p = pyaudio.PyAudio(); [print(f'{i}: {p.get_device_info_by_index(i)[\"name\"]}') for i in range(p.get_device_count())]"
+```
+
+Then specify the device index:
+```bash
+export MANUSCLAW_AUDIO_INPUT_DEVICE=2  # Use the index from the list above
+manusclaw voice talk --start
+```
+
+On **Termux/Android**, voice features are limited — microphone access may be restricted.
+
+On **WSL2**, audio devices require USB/pulseaudio passthrough (see the [WSL2 Guide](platforms/wsl.md)).
+
+### Error: TTS not producing audio output
+
+**Symptom:** The agent responds but no audio plays through speakers.
+
+**Solutions:**
+
+1. **Check which TTS provider is active:**
+   ```bash
+   echo $ELEVENLABS_API_KEY     # Best quality
+   echo $OPENAI_API_KEY         # Good quality, uses tts-1
+   ```
+
+2. **If no TTS key is set, fallback to system TTS:**
+   ```bash
+   pip install pyttsx3
+   manusclaw voice talk --start --tts-engine system
+   ```
+
+3. **Test audio output device:**
+   ```bash
+   python3 -c "import pyaudio; p = pyaudio.PyAudio(); print(p.get_default_output_device_info())"
+   ```
+
+---
+
+## SSH Gateway Issues (v5)
+
+### Error: SSH connection refused on port 2222
+
+**Symptom:** `ssh admin@your-server:2222` fails with "Connection refused."
+
+**Diagnosis:**
+
+```bash
+# Check if the SSH gateway is running
+sudo systemctl status manusclaw-ssh
+
+# Check if the port is listening
+ss -tlnp | grep 2222
+
+# Check the config
+echo $MANUSCLAW_SSH_ENABLED
+echo $MANUSCLAW_SSH_PORT
+```
+
+**Solutions:**
+
+1. **Enable SSH in config:**
+   ```bash
+   export MANUSCLAW_SSH_ENABLED=true
+   export MANUSCLAW_SSH_PORT=2222
+   ```
+
+2. **Start the SSH gateway:**
+   ```bash
+   manusclaw-ssh start
+   ```
+
+3. **Open the firewall port:**
+   ```bash
+   sudo ufw allow 2222/tcp
+   ```
+
+4. **Check Docker port mapping** (if running in Docker):
+   ```bash
+   # Ensure port 2222 is mapped in docker-compose.yml
+   docker compose logs manusclaw | grep ssh
+   ```
+
+### Error: SSH public key auth fails
+
+**Symptom:** SSH connection is refused with "Permission denied (publickey)."
+
+**Root Cause:** Your public key is not in the authorized keys file.
+
+**Solution:**
+
+```bash
+# Add your public key
+cat ~/.ssh/id_ed25519.pub >> ~/.manusclaw/ssh/authorized_keys
+
+# Or configure the path
+export MANUSCLAW_SSH_AUTH_KEYS=~/.ssh/authorized_keys
+```
+
+### Error: SSH command rejected — "unknown command"
+
+**Symptom:** After connecting via SSH, your command is rejected.
+
+**Root Cause:** The SSH gateway has a strict command whitelist. Only these commands are allowed: `status`, `restart`, `logs`, `agent <prompt>`, `channels list`, `cron list`, `help`, `exit`.
+
+**Solution:** Use only whitelisted commands. If you need shell access, SSH directly to the host machine instead of using the ManusClaw SSH gateway.
+
+---
+
+## Channel Adapter Issues (v5)
+
+### Error: Telegram channel not receiving messages
+
+**Symptom:** The Telegram bot is running but doesn't respond to messages.
+
+**Diagnosis:**
+
+```bash
+# Check if the bot token is valid
+curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe"
+```
+
+**Solutions:**
+
+1. **Verify the bot token** — it should return your bot's username and ID
+2. **Check webhook configuration** — if running behind Nginx, ensure the webhook URL is correct:
+   ```bash
+   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
+   ```
+3. **Restart the channel:**
+   ```bash
+   manusclaw-channels start telegram
+   ```
+
+### Error: Matrix channel fails to sync
+
+**Symptom:** Matrix adapter starts but doesn't receive new messages.
+
+**Root Cause:** Common causes include:
+- Invalid access token
+- The bot account is already running elsewhere (conflicting sessions)
+- Homeserver rate limiting
+
+**Solutions:**
+
+1. **Verify your access token:**
+   ```bash
+   curl -H "Authorization: Bearer $MATRIX_ACCESS_TOKEN" "$MATRIX_HOMESERVER/_matrix/client/v3/account/whoami"
+   ```
+
+2. **Regenerate the token:**
+   - Log in to your bot account at `https://app.element.io`
+   - Settings → Help & About → Advanced → Access Token
+
+3. **Check homeserver logs for rate limiting:**
+   - Some homeservers (especially matrix.org) have strict rate limits for `/sync` requests
+
+### Error: Discord bot not connecting
+
+**Symptom:** Discord channel fails with gateway connection error.
+
+**Diagnosis:**
+
+```bash
+# Check bot token validity
+curl -H "Authorization: Bot $DISCORD_BOT_TOKEN" https://discord.com/api/v10/users/@me
+```
+
+**Solutions:**
+
+1. **Verify the bot is added to the guild** — check the Discord Developer Portal
+2. **Ensure correct intents are enabled:**
+   - Go to Discord Developer Portal → Bot → Privileged Gateway Intents
+   - Enable "Message Content Intent" and "Server Members Intent"
+3. **Restart the channel:**
+   ```bash
+   manusclaw-channels start discord
+   ```
+
+### Error: IRC channel connection drops
+
+**Symptom:** IRC adapter connects but gets disconnected after a few minutes.
+
+**Root Cause:** IRC servers enforce PING/PONG keepalive. If the adapter doesn't respond in time, the server drops the connection.
+
+**Solutions:**
+
+1. **Check your connection stability**
+2. **Try a different IRC server or port:**
+   ```bash
+   export IRC_SERVER=irc.libera.chat
+   export IRC_PORT=6697  # TLS port
+   ```
+3. **Reconnect:**
+   ```bash
+   manusclaw-channels start irc
+   ```
+
+---
+
+## Webhook Issues (v5)
+
+### Error: Webhook signature verification failed (403)
+
+**Symptom:** External services send POST requests to your webhook endpoint but receive `403 Forbidden`.
+
+**Root Cause:** The webhook payload is missing or has an invalid HMAC signature in the `X-Signature` header.
+
+**Solutions:**
+
+1. **Verify the secret matches:**
+   ```bash
+   manusclaw-webhook list
+   # Check the secret for your webhook ID
+   ```
+
+2. **Generate a test signature:**
+   ```bash
+   manusclaw-webhook sign --id your-webhook-id \
+     --payload '{"test": "data"}'
+   ```
+
+3. **Ensure the sender includes the signature header:**
+   - GitHub: Automatically includes `X-Hub-Signature-256` when you set the secret
+   - Stripe: Includes `Stripe-Signature` header
+   - Custom: Must include `X-Signature` header with `sha256=<hmac_hex>`
+
+4. **Check Nginx is forwarding signature headers:**
+   ```nginx
+   proxy_set_header X-Signature $http_x_signature;
+   proxy_set_header X-Webhook-Signature $http_x_webhook_signature;
+   ```
+
+### Error: Webhook not triggering agent
+
+**Symptom:** Webhook receives the request but no agent is spawned.
+
+**Diagnosis:**
+
+```bash
+# Check webhook logs
+journalctl -u manusclaw -n 50 | grep webhook
+```
+
+**Solutions:**
+
+1. **Verify the prompt template is valid:**
+   ```bash
+   manusclaw-webhook list
+   ```
+2. **Test manually:**
+   ```bash
+   curl -X POST http://localhost:8765/webhooks/your-webhook-id \
+     -H "Content-Type: application/json" \
+     -H "X-Signature: $(manusclaw-webhook sign --id your-webhook-id --payload '{"test": true}' | tail -1)" \
+     -d '{"test": true}'
+   ```
+
+---
+
+## Model Failover Issues (v5)
+
+### Error: Model failover not triggering
+
+**Symptom:** When the primary model fails, ManusClaw returns an error instead of falling back to the next provider.
+
+**Diagnosis:**
+
+```bash
+# Check if failover profiles are configured
+cat ~/.manusclaw/config.yaml | grep -A10 model_profiles
+```
+
+**Solutions:**
+
+1. **Ensure failover profiles are defined in config.yaml:**
+   ```yaml
+   model_profiles:
+     default:
+       - provider: openai
+         model: gpt-4o
+         priority: 1
+       - provider: anthropic
+         model: claude-sonnet-4-20250514
+         priority: 2
+   ```
+
+2. **Check that provider API keys are set** — failover can't work if the fallback provider has no credentials
+
+3. **Check cooldown settings** — if all providers are in cooldown, you'll get a NullResponse:
+   ```bash
+   # Check logs for cooldown messages
+   journalctl -u manusclaw | grep cooldown
+   ```
+
+4. **Reset cooldown manually** (restart the server):
+   ```bash
+   sudo systemctl restart manusclaw
+   ```
+
+### Error: All models returning NullResponse
+
+**Symptom:** Every request returns a NullResponse or empty result.
+
+**Root Cause:** All configured providers are in cooldown (failed too many times).
+
+**Solutions:**
+
+1. **Check your API keys** — they may have expired or been revoked
+2. **Check your network** — you may not be able to reach the providers
+3. **Check rate limits** — all keys may be exhausted
+4. **Restart to reset cooldowns:**
+   ```bash
+   sudo systemctl restart manusclaw
+   ```
+
+---
+
+## Credential Pool Issues (v5)
+
+### Error: Credential pool exhaustion
+
+**Symptom:** All API keys in the pool are rate-limited and requests fail.
+
+**Diagnosis:**
+
+```bash
+# Check how many keys are configured
+env | grep OPENAI_API_KEY
+# Should show OPENAI_API_KEY_1, OPENAI_API_KEY_2, etc.
+```
+
+**Solutions:**
+
+1. **Add more keys to the pool:**
+   ```bash
+   cat >> ~/.manusclaw/.env << 'EOF'
+   OPENAI_API_KEY_4=sk-proj-key-four
+   OPENAI_API_KEY_5=sk-proj-key-five
+   EOF
+   ```
+
+2. **Upgrade your API plan** — higher tiers have higher rate limits
+
+3. **Use model failover** to distribute load across multiple providers
+
+4. **Check which keys are in cooldown:**
+   ```bash
+   journalctl -u manusclaw | grep "cooldown\|rate.limit"
+   ```
+
+---
+
+## Gmail Pub/Sub Issues (v5)
+
+### Error: Gmail watcher not receiving emails
+
+**Symptom:** The Gmail Pub/Sub integration is enabled but no emails trigger agent actions.
+
+**Diagnosis:**
+
+1. **Check Google Cloud credentials:**
+   ```bash
+   echo $GOOGLE_APPLICATION_CREDENTIALS
+   cat $GOOGLE_APPLICATION_CREDENTIALS | python3 -c "import json,sys; print(json.load(sys.stdin).get('type'))"
+   # Should print: "service_account"
+   ```
+
+2. **Check Pub/Sub topic:**
+   ```bash
+   gcloud pubsub topics list | grep manusclaw
+   ```
+
+3. **Check subscription push endpoint:**
+   ```bash
+   gcloud pubsub subscriptions describe manusclaw-gmail-sub \
+     --format='value(pushConfig.pushEndpoint)'
+   ```
+
+**Solutions:**
+
+1. **Ensure the Pub/Sub push endpoint points to your server:**
+   ```bash
+   gcloud pubsub subscriptions update manusclaw-gmail-sub \
+     --push-endpoint https://your-server:8765/webhooks/gmail-push
+   ```
+
+2. **Verify the Gmail watch topic is configured:**
+   ```bash
+   export GMAIL_WATCH_TOPIC_NAME=projects/your-project/topics/manusclaw-gmail-topic
+   ```
+
+3. **Check that the service account has Gmail API permissions:**
+   - Go to Google Cloud Console → IAM & Admin → Service Accounts
+   - Ensure the service account has the "Gmail API Watcher" role
+
+4. **Test the webhook endpoint directly:**
+   ```bash
+   curl -k https://your-server:8765/health
+   ```
+
+### Error: Gmail auto-reply not working
+
+**Symptom:** Emails are received but automatic replies are not sent.
+
+**Solution:**
+
+```bash
+# Ensure auto-reply is enabled
+export GMAIL_AUTO_REPLY=true
+
+# Check that the Gmail API scopes include send permissions
+# The service account needs: gmail.compose, gmail.send
 ```
 
 ---
@@ -859,6 +1349,12 @@ termux-wake-lock
 engine = "duckduckgo"
 ```
 
+### Error: Voice features not working on Termux
+
+**Root Cause:** Termux/Android has limited audio device access. PyAudio may not be able to access the microphone or speakers.
+
+**Workaround:** Voice features (wake word, talk mode) are not fully supported on Termux. Use text-based interaction instead. If you need voice, use Termux's SSH to connect to a ManusClaw instance running on a desktop machine.
+
 ---
 
 ## Docker-Specific Issues
@@ -945,6 +1441,12 @@ Common causes:
 - Invalid config.toml (check the mounted config file)
 - Port already in use (change the port mapping)
 
+### Error: `version` key is deprecated in docker-compose.yml
+
+**Symptom:** Docker Compose warns about the `version: "3.8"` key.
+
+**Solution:** Remove the `version:` key. Modern Docker Compose (v2+) ignores it and uses profiles instead. See the [Deployment Guide](deployment.md) for updated compose files.
+
 ---
 
 ## Rate Limiting Issues
@@ -973,7 +1475,19 @@ Common causes:
    - Anthropic: Varies by plan
    - Google: 60 RPM (free), 2,000 RPM (paid)
 
-4. **Increase the retry delay:**
+4. **Enable model failover** (v5) — automatically routes to another provider when one is rate-limited:
+   ```yaml
+   model_profiles:
+     default:
+       - provider: openai
+         model: gpt-4o
+         priority: 1
+       - provider: groq
+         model: llama-3.3-70b-versatile
+         priority: 2
+   ```
+
+5. **Increase the retry delay:**
    ```toml
    [llm]
    retries = 5
@@ -983,7 +1497,7 @@ Common causes:
    timeout = 120
    ```
 
-5. **Use a different model** with higher rate limits (e.g., `gpt-4o-mini` instead of `gpt-4o`)
+6. **Use a different model** with higher rate limits (e.g., `gpt-4o-mini` instead of `gpt-4o`)
 
 ---
 
@@ -1058,6 +1572,9 @@ rm ~/.manusclaw/USER.md
 rm -rf ~/.manusclaw/sessions
 rm -rf ~/.manusclaw/tasks
 rm -rf ~/.manusclaw/skills
+rm -rf ~/.manusclaw/profiles
+rm -rf ~/.manusclaw/ssh
+rm -f ~/.manusclaw/cron.yaml
 ```
 
 ### Step 3: Remove workspace data (if needed)

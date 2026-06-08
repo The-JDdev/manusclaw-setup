@@ -1,4 +1,4 @@
-# Termux (Android) Guide — ManusClaw v4.0.0
+# Termux (Android) Guide — ManusClaw v5.0.0
 
 Running ManusClaw on Android via Termux transforms your phone or tablet into a portable AI agent. This guide covers everything you need to know about installing, configuring, and using ManusClaw on Android, including workarounds for Termux-specific limitations and tips for getting the best performance.
 
@@ -97,7 +97,7 @@ When prompted about configuration file changes, press `Enter` to accept the defa
 ### Step 2: Install essential packages
 
 ```bash
-pkg install -y python python-pip git build-essential binutils
+pkg install -y python python-pip git build-essential binutils openssl portaudio
 ```
 
 This installs:
@@ -177,8 +177,7 @@ Some dependencies may fail to build. Here are common fixes:
 
 ```bash
 # Install additional build dependencies
-pkg install -y libffi openssl rust
-
+pkg install -y libffi openssl rust portaudio
 # Retry the installation
 pip install manusclaw
 ```
@@ -214,7 +213,7 @@ pip install -e .
 
 ## Using the Termux Setup Script
 
-ManusClaw includes a dedicated `setup_termux.sh` script that automates the entire Termux installation process, including handling common issues:
+ManusClaw includes a dedicated `setup-termux.sh` script (previously `setup_termux.sh`) that automates the entire Termux installation process, including handling common issues:
 
 ```bash
 # Clone the repository
@@ -222,8 +221,10 @@ git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
 
 # Run the Termux setup script
-bash setup_termux.sh
+bash setup-termux.sh
 ```
+
+> **Note:** The script filename is `setup-termux.sh` (with a hyphen). If you encounter `setup_termux.sh` (underscore), it's the older name — use `setup-termux.sh` instead.
 
 The script performs the following actions:
 1. Updates Termux packages
@@ -381,6 +382,21 @@ engine = "duckduckgo"
 
 You can still search the web and fetch page content — you just can't interact with JavaScript-heavy pages or take screenshots.
 
+### Voice features — Limited on Termux
+
+**Limitation:** Termux/Android has limited audio device access. PyAudio may not be able to access the microphone or speakers, making v5 voice features (wake word, talk mode) unreliable.
+
+**Workaround:** Use text-based interaction instead. If you need voice, use Termux's SSH to connect to a ManusClaw instance running on a desktop machine.
+
+### SSH gateway — Use alternate port
+
+**Limitation:** The v5 SSH gateway requires port 2222, which may conflict with Termux's own `sshd` running on port 8022.
+
+**Workaround:** Use a different port for ManusClaw SSH:
+```bash
+export MANUSCLAW_SSH_PORT=2223
+```
+
 ### Ollama — Limited support
 
 **Limitation:** Running Ollama directly on Termux is possible but requires a device with significant RAM (6 GB+) and patience. The Android kernel doesn't support all the features that Ollama expects.
@@ -403,6 +419,12 @@ cd ollama
 go build .
 ```
 
+### Docker sandbox — NOT available
+
+**Limitation:** Termux cannot run Docker or Docker Compose. This means the Docker sandbox backend for code isolation is unavailable.
+
+**Workaround:** Use the `openshell` sandbox backend instead (namespace isolation) or set `SANDBOX_BACKEND=openshell` in your config.
+
 ### Background execution — Requires wake lock
 
 **Limitation:** Android will kill Termux processes after a few minutes in the background.
@@ -414,7 +436,7 @@ go build .
 termux-wake-lock
 
 # Run ManusClaw server
-manusclaw-server --host 0.0.0.0 --port 8000 &
+manusclaw-server --host 0.0.0.0 --port 8765 &
 
 # Keep Termux in the foreground as a notification
 # The wake lock notification tells Android not to kill the process
@@ -496,13 +518,13 @@ termux-wake-lock
 source ~/mc-env/bin/activate 2>/dev/null
 
 # Start the server
-manusclaw-server --host 0.0.0.0 --port 8000
+manusclaw-server --host 0.0.0.0 --port 8765
 
 # If the server crashes, restart after a delay
 while true; do
     echo "ManusClaw server crashed. Restarting in 10 seconds..."
     sleep 10
-    manusclaw-server --host 0.0.0.0 --port 8000
+    manusclaw-server --host 0.0.0.0 --port 8765
 done
 EOF
 
@@ -529,7 +551,7 @@ echo '~/start_manusclaw.sh &' >> ~/.bashrc
    #!/bin/bash
    termux-wake-lock
    source ~/mc-env/bin/activate 2>/dev/null
-   manusclaw-server --host 0.0.0.0 --port 8000 &
+   manusclaw-server --host 0.0.0.0 --port 8765 &
    EOF
    chmod +x ~/.termux/boot/manusclaw.sh
    ```
@@ -545,7 +567,7 @@ Once the server is running, access it from any device on the same network:
 ifconfig wlan0 | grep inet
 
 # From another device:
-curl http://192.168.1.x:8000/health
+curl http://192.168.1.x:8765/health
 ```
 
 ---

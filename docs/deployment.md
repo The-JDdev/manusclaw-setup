@@ -1,4 +1,4 @@
-# Deployment Guide — ManusClaw v4.0.0
+# Deployment Guide — ManusClaw v5.0.0
 
 This guide covers deploying ManusClaw in production environments. Whether you're running it on a VPS, in Docker, or behind a reverse proxy, this guide provides battle-tested configurations for reliable, secure, and maintainable deployments.
 
@@ -16,6 +16,7 @@ This guide covers deploying ManusClaw in production environments. Whether you're
 - [Auto-Start on Boot](#auto-start-on-boot)
 - [Background Execution](#background-execution)
 - [Process Management with Supervisord](#process-management-with-supervisord)
+- [Channel Adapter Deployment](#channel-adapter-deployment)
 - [Security Recommendations](#security-recommendations)
 - [Resource Requirements](#resource-requirements)
 - [Scaling Considerations](#scaling-considerations)
@@ -30,10 +31,20 @@ ManusClaw can be deployed in several ways depending on your needs:
 |--------|----------|-----------|-------------|
 | **Docker** | Isolated, reproducible deployments | Low | Medium |
 | **VPS (bare metal)** | Maximum control, custom tuning | Medium | Low-Medium |
-| **Docker Compose** | Multi-service deployments | Medium | Medium |
+| **Docker Compose** | Multi-service deployments with profiles | Medium | Medium |
 | **Kubernetes** | Large-scale, auto-scaling | High | High |
 
 For most users and small teams, Docker or a simple VPS deployment is the right choice. Kubernetes is only necessary if you need to handle very high traffic or require automatic scaling.
+
+### v5 Deployment Modes
+
+ManusClaw v5.0.0 introduces three deployment profiles:
+
+| Profile | Components | Use Case |
+|---------|-----------|----------|
+| **server** | HTTP server + WebSocket + WebChat + Webhooks | API access, web UI, webhook ingestion |
+| **cli** | Interactive REPL + session tools | Single-user local or SSH usage |
+| **multi-agent** | Server + Channels + SSH gateway + Cron | Full multi-channel AI agent platform |
 
 ---
 
@@ -49,27 +60,27 @@ git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
 
 # Build the image
-docker build -t manusclaw:4.0.0 .
+docker build -t manusclaw:5.0.0 .
 
 # Tag as latest
-docker tag manusclaw:4.0.0 manusclaw:latest
+docker tag manusclaw:5.0.0 manusclaw:latest
 ```
 
 ### Running the container
 
-#### Basic server mode
+#### Basic server mode (v5 default port 8765)
 
 ```bash
 docker run -d \
   --name manusclaw-server \
   --restart unless-stopped \
-  -p 8000:8000 \
+  -p 8765:8765 \
   -e OPENAI_API_KEY="sk-your-key-here" \
-  -e MANUSCLAW_SERVER_API_KEY="your-secure-key" \
+  -e MANUSCLAW_API_KEY="your-secure-key" \
   -v manusclaw-config:/root/.manusclaw \
   -v manusclaw-workspace:/app/workspace \
   manusclaw:latest \
-  manusclaw-server --host 0.0.0.0 --port 8000
+  manusclaw-server --host 0.0.0.0 --port 8765
 ```
 
 Let's break down each flag:
@@ -77,9 +88,9 @@ Let's break down each flag:
 - **`-d`** — Run in detached mode (background)
 - **`--name manusclaw-server`** — Give the container a recognizable name
 - **`--restart unless-stopped`** — Automatically restart if it crashes, but not if you manually stop it
-- **`-p 8000:8000`** — Map host port 8000 to container port 8000
+- **`-p 8765:8765`** — Map host port 8765 to container port 8765
 - **`-e OPENAI_API_KEY=...`** — Pass API keys as environment variables
-- **`-e MANUSCLAW_SERVER_API_KEY=...`** — Set a server authentication key
+- **`-e MANUSCLAW_API_KEY=...`** — Set a server authentication key
 - **`-v manusclaw-config:/root/.manusclaw`** — Persist config to a named volume
 - **`-v manusclaw-workspace:/app/workspace`** — Persist workspace to a named volume
 
@@ -118,7 +129,7 @@ docker exec ollama ollama pull llama3
 docker run -d \
   --name manusclaw-server \
   --restart unless-stopped \
-  -p 8000:8000 \
+  -p 8765:8765 \
   -e OLLAMA_BASE_URL="http://ollama:11434" \
   -e MANUSCLAW_PROVIDER="ollama" \
   -e MANUSCLAW_MODEL="llama3" \
@@ -164,26 +175,28 @@ docker rm manusclaw-server
 
 The `docker-compose.yml` file provides a more manageable way to configure and run ManusClaw, especially when you have multiple services (ManusClaw, Ollama, databases, etc.).
 
-### Basic docker-compose.yml
+> **v5 Note:** The `version:` field is deprecated in modern Docker Compose (v2+). Compose files now use **profiles** instead of the `version: "3.8"` top-level key.
+
+### Basic docker-compose.yml (server profile)
 
 ```yaml
-version: "3.8"
-
 services:
   manusclaw:
     build: .
     container_name: manusclaw-server
     restart: unless-stopped
+    profiles:
+      - server
     ports:
-      - "8000:8000"
+      - "8765:8765"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - MANUSCLAW_SERVER_API_KEY=${MANUSCLAW_SERVER_API_KEY}
+      - MANUSCLAW_API_KEY=${MANUSCLAW_API_KEY}
     volumes:
       - manusclaw-config:/root/.manusclaw
       - manusclaw-workspace:/app/workspace
-    command: manusclaw-server --host 0.0.0.0 --port 8000
+    command: manusclaw-server --host 0.0.0.0 --port 8765
 
 volumes:
   manusclaw-config:
@@ -192,31 +205,39 @@ volumes:
     driver: local
 ```
 
-### Full docker-compose.yml with Ollama
+### Multi-profile docker-compose.yml with Ollama
+
+This configuration uses Docker Compose **profiles** to let you start only the services you need:
 
 ```yaml
-version: "3.8"
-
 services:
   manusclaw:
     build: .
     container_name: manusclaw-server
     restart: unless-stopped
+    profiles:
+      - server
+      - multi-agent
     ports:
-      - "8000:8000"
+      - "8765:8765"
+      - "2222:2222"   # SSH gateway (multi-agent only)
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OLLAMA_BASE_URL=http://ollama:11434
-      - MANUSCLAW_SERVER_API_KEY=${MANUSCLAW_SERVER_API_KEY}
+      - MANUSCLAW_API_KEY=${MANUSCLAW_API_KEY}
+      - MANUSCLAW_SSH_ENABLED=true
+      - MANUSCLAW_SSH_PORT=2222
       - MANUSCLAW_LOG_LEVEL=INFO
     volumes:
       - manusclaw-config:/root/.manusclaw
       - manusclaw-workspace:/app/workspace
       - ./config.toml:/root/.manusclaw/config.toml:ro
-    command: manusclaw-server --host 0.0.0.0 --port 8000
+      - ./ssh_host_keys:/root/.manusclaw/ssh/:ro
+    command: manusclaw-server --host 0.0.0.0 --port 8765
     depends_on:
-      - ollama
+      ollama:
+        condition: service_started
     networks:
       - manusclaw-net
 
@@ -224,6 +245,8 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
+    profiles:
+      - multi-agent
     # Uncomment for GPU support (requires NVIDIA Container Toolkit)
     # deploy:
     #   resources:
@@ -259,21 +282,24 @@ Create a `.env` file in the same directory as your `docker-compose.yml`:
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# Server authentication
-MANUSCLAW_SERVER_API_KEY=your-secure-api-key-change-this
+# Server authentication (v5)
+MANUSCLAW_API_KEY=your-secure-api-key-change-this
 
 # Logging
 MANUSCLAW_LOG_LEVEL=INFO
 ```
 
-### docker-compose commands
+### docker-compose commands with profiles
 
 ```bash
-# Start all services
-docker compose up -d
+# Start only the server profile
+docker compose --profile server up -d
+
+# Start the full multi-agent stack (server + Ollama + SSH)
+docker compose --profile multi-agent up -d
 
 # Start and rebuild images
-docker compose up -d --build
+docker compose --profile server up -d --build
 
 # View logs for all services
 docker compose logs -f
@@ -281,7 +307,7 @@ docker compose logs -f
 # View logs for just ManusClaw
 docker compose logs -f manusclaw
 
-# Stop all services
+# Stop all services (across all profiles)
 docker compose down
 
 # Stop and remove volumes (⚠️ deletes all data)
@@ -333,9 +359,10 @@ sudo systemctl restart sshd
 
 # Set up the firewall
 sudo ufw allow OpenSSH
-sudo ufw allow 8000/tcp   # ManusClaw server port
-sudo ufw allow 80/tcp     # HTTP (for Nginx)
-sudo ufw allow 443/tcp    # HTTPS (for Nginx)
+sudo ufw allow 8765/tcp   # ManusClaw v5 server port
+sudo ufw allow 2222/tcp    # SSH gateway (optional, for multi-agent)
+sudo ufw allow 80/tcp      # HTTP (for Nginx)
+sudo ufw allow 443/tcp     # HTTPS (for Nginx)
 sudo ufw --force enable
 ```
 
@@ -374,7 +401,7 @@ mkdir -p ~/.manusclaw
 # Create the .env file with API keys
 cat > ~/.manusclaw/.env << 'EOF'
 OPENAI_API_KEY=sk-proj-xxx
-MANUSCLAW_SERVER_API_KEY=your-secure-key
+MANUSCLAW_API_KEY=your-secure-key
 EOF
 
 chmod 600 ~/.manusclaw/.env
@@ -387,7 +414,7 @@ model = "gpt-4o"
 
 [server]
 host = "127.0.0.1"
-port = 8000
+port = 8765
 api_key = "your-secure-key"
 
 [logging]
@@ -427,7 +454,7 @@ Add the following content:
 
 ```ini
 [Unit]
-Description=ManusClaw AI Agent Server
+Description=ManusClaw AI Agent Server v5
 After=network.target
 Wants=network-online.target
 
@@ -438,7 +465,7 @@ Group=manusclaw
 WorkingDirectory=/home/manusclaw
 
 # Activate the virtual environment and run the server
-ExecStart=/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8000
+ExecStart=/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8765
 
 # Restart on failure
 Restart=on-failure
@@ -494,6 +521,48 @@ sudo systemctl restart manusclaw
 sudo systemctl stop manusclaw
 ```
 
+### SSH gateway service (v5, optional)
+
+If you're deploying the multi-agent profile with the SSH gateway, create a separate systemd service:
+
+```bash
+sudo nano /etc/systemd/system/manusclaw-ssh.service
+```
+
+```ini
+[Unit]
+Description=ManusClaw SSH Remote Gateway
+After=network.target manusclaw.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manusclaw
+Group=manusclaw
+WorkingDirectory=/home/manusclaw
+
+ExecStart=/home/manusclaw/manusclaw-env/bin/manusclaw-ssh start
+
+Restart=on-failure
+RestartSec=10
+
+Environment=PATH=/home/manusclaw/manusclaw-env/bin:/usr/bin:/bin
+EnvironmentFile=/home/manusclaw/.manusclaw/.env
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=manusclaw-ssh
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable manusclaw-ssh
+sudo systemctl start manusclaw-ssh
+```
+
 ### Cron service (optional)
 
 If you use the cron scheduling feature, create a separate service:
@@ -542,6 +611,8 @@ sudo systemctl start manusclaw-cron
 
 Nginx sits between the internet and your ManusClaw server, handling SSL termination, rate limiting, and request routing. This is the recommended setup for any publicly accessible deployment.
 
+> **v5 Note:** The default port changed from 8000 to **8765** in v5.0.0. Update your Nginx configuration accordingly.
+
 ### Install Nginx
 
 ```bash
@@ -555,9 +626,9 @@ sudo nano /etc/nginx/sites-available/manusclaw
 ```
 
 ```nginx
-# Upstream ManusClaw server
+# Upstream ManusClaw server (v5 default port)
 upstream manusclaw_backend {
-    server 127.0.0.1:8000;
+    server 127.0.0.1:8765;
     keepalive 64;
 }
 
@@ -611,7 +682,7 @@ server {
         proxy_pass http://manusclaw_backend;
         proxy_http_version 1.1;
 
-        # WebSocket support
+        # WebSocket support (for canvas, webchat, v5 WebSocket endpoints)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
@@ -636,6 +707,16 @@ server {
         proxy_pass http://manusclaw_backend/health;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+    }
+
+    # Webhook endpoint — allow larger payloads and pass through signature headers
+    location /webhooks/ {
+        proxy_pass http://manusclaw_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Signature $http_x_signature;
+        proxy_set_header X-Webhook-Signature $http_x_webhook_signature;
     }
 }
 ```
@@ -729,7 +810,7 @@ If you're NOT using systemd, you can use alternative methods:
 crontab -e
 
 # Add this line:
-@reboot /home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8000 >> /home/manusclaw/logs/manusclaw.log 2>&1
+@reboot /home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8765 >> /home/manusclaw/logs/manusclaw.log 2>&1
 ```
 
 ### Using /etc/rc.local
@@ -741,7 +822,7 @@ sudo nano /etc/rc.local
 ```bash
 #!/bin/bash
 # Start ManusClaw server
-su - manusclaw -c "/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8000 >> /home/manusclaw/logs/manusclaw.log 2>&1 &"
+su - manusclaw -c "/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8765 >> /home/manusclaw/logs/manusclaw.log 2>&1 &"
 exit 0
 ```
 
@@ -760,7 +841,7 @@ For situations where you need to run ManusClaw without systemd (e.g., on a share
 The simplest approach — runs a command that persists after you log out:
 
 ```bash
-nohup manusclaw-server --host 0.0.0.0 --port 8000 > manusclaw.log 2>&1 &
+nohup manusclaw-server --host 0.0.0.0 --port 8765 > manusclaw.log 2>&1 &
 
 # Note the PID for later
 echo $!
@@ -781,7 +862,7 @@ tmux provides a persistent terminal session that you can detach from and reattac
 tmux new -s manusclaw
 
 # Inside tmux, start ManusClaw
-manusclaw-server --host 0.0.0.0 --port 8000
+manusclaw-server --host 0.0.0.0 --port 8765
 
 # Detach: Press Ctrl+B, then D
 # The server continues running in the background
@@ -808,7 +889,7 @@ Similar to tmux but older and more widely available on minimal server installati
 screen -S manusclaw
 
 # Inside screen, start ManusClaw
-manusclaw-server --host 0.0.0.0 --port 8000
+manusclaw-server --host 0.0.0.0 --port 8765
 
 # Detach: Press Ctrl+A, then D
 # Reattach later
@@ -841,7 +922,7 @@ sudo nano /etc/supervisor/conf.d/manusclaw.conf
 
 ```ini
 [program:manusclaw]
-command=/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8000
+command=/home/manusclaw/manusclaw-env/bin/manusclaw-server --host 127.0.0.1 --port 8765
 directory=/home/manusclaw
 user=manusclaw
 autostart=true
@@ -877,6 +958,94 @@ sudo tail -f /home/manusclaw/logs/manusclaw-supervisor.log
 
 ---
 
+## Channel Adapter Deployment
+
+ManusClaw v5.0.0 supports 12+ messaging channels. In production, each channel adapter runs alongside the ManusClaw server. Here's how to deploy them.
+
+### Starting channel adapters
+
+Channel adapters are started individually and connect to the running ManusClaw server:
+
+```bash
+# Start Telegram channel
+manusclaw-channels start telegram
+
+# Start Discord channel
+manusclaw-channels start discord
+
+# Start multiple channels
+manusclaw-channels start telegram,discord,slack
+
+# Start Matrix channel
+manusclaw-channels start matrix
+```
+
+### Running channels as systemd services
+
+For production deployments, run each channel as a separate systemd service:
+
+```bash
+# Create a generic channel service template
+sudo nano /etc/systemd/system/manusclaw-channel@.service
+```
+
+```ini
+[Unit]
+Description=ManusClaw Channel — %i
+After=network.target manusclaw.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=manusclaw
+Group=manusclaw
+WorkingDirectory=/home/manusclaw
+
+ExecStart=/home/manusclaw/manusclaw-env/bin/manusclaw-channels start %i
+
+Restart=on-failure
+RestartSec=10
+
+Environment=PATH=/home/manusclaw/manusclaw-env/bin:/usr/bin:/bin
+EnvironmentFile=/home/manusclaw/.manusclaw/.env
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=manusclaw-channel-%i
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# Enable specific channels
+sudo systemctl daemon-reload
+sudo systemctl enable manusclaw-channel@telegram
+sudo systemctl enable manusclaw-channel@discord
+sudo systemctl start manusclaw-channel@telegram
+sudo systemctl start manusclaw-channel@discord
+
+# Check status
+sudo systemctl status manusclaw-channel@telegram
+```
+
+### Channel adapter notes
+
+| Channel | Environment Variables Required | Notes |
+|---------|-------------------------------|-------|
+| Telegram | `TELEGRAM_BOT_TOKEN` | Needs webhook setup for v5 server |
+| Discord | `DISCORD_BOT_TOKEN` | Gateway (WebSocket) — no inbound ports needed |
+| Slack | `SLACK_BOT_TOKEN` | Web API — polling or Socket Mode |
+| WhatsApp | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_BUSINESS_PHONE_ID` | Requires Meta Business verification |
+| Matrix | `MATRIX_HOMESERVER`, `MATRIX_ACCESS_TOKEN`, `MATRIX_USER_ID` | Long-polling — firewall-friendly |
+| IRC | `IRC_SERVER`, `IRC_PORT`, `IRC_NICK`, `IRC_CHANNELS` | Pure TCP outbound |
+| Twitch | `TWITCH_BOT_TOKEN`, `TWITCH_CHANNEL` | IRC-over-TLS outbound |
+| Signal | `SIGNAL_CLI_REST_URL`, `SIGNAL_CLI_NUMBER` | Requires signal-cli daemon |
+| WebChat | None | Built-in — available when server runs |
+| SSH | `MANUSCLAW_SSH_ENABLED`, `MANUSCLAW_SSH_PORT` | Requires port 2222 open |
+
+---
+
 ## Security Recommendations
 
 Security is critical for any deployment, especially when ManusClaw has the ability to execute code and modify files. Follow these recommendations to secure your deployment.
@@ -891,6 +1060,8 @@ host = "127.0.0.1"  # Only accept local connections
 ```
 
 ### 2. Always set a server API key
+
+In v5, the environment variable is `MANUSCLAW_API_KEY` (previously `MANUSCLAW_SERVER_API_KEY`):
 
 ```toml
 [server]
@@ -981,6 +1152,53 @@ Never use `["*"]` in production:
 cors_origins = ["https://your-app.example.com"]
 ```
 
+### 11. Webhook HMAC verification (v5)
+
+All incoming webhooks should verify HMAC-SHA256 signatures:
+
+```bash
+# Create a webhook with a signing secret
+manusclaw-webhook create \
+  --url "/webhooks/github-push" \
+  --secret "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+  --prompt "Analyze this GitHub push: {{payload.head_commit.message}}"
+```
+
+Never skip webhook signature verification in production. ManusClaw v5 rejects unsigned webhook requests by default.
+
+### 12. SSH gateway security (v5)
+
+The built-in SSH gateway (`manusclaw-ssh`) enforces:
+
+- **Public key auth only** — no password authentication
+- **Command whitelist** — only 9 approved commands (status, restart, logs, agent, channels, cron, help, exit)
+- **Input validation** — rejects pipes, redirects, and shell metacharacters
+
+Additional hardening:
+
+```bash
+# Use dedicated SSH host keys (not your system keys)
+mkdir -p ~/.manusclaw/ssh
+ssh-keygen -t ed25519 -f ~/.manusclaw/ssh/ssh_host_ed25519_key -N ""
+
+# Restrict authorized SSH users
+echo "ssh-ed25519 AAAA... your-key-here admin" > ~/.manusclaw/ssh/authorized_keys
+```
+
+### 13. Credential pool security
+
+If using the credential pool for rate limit rotation, protect your keys:
+
+```bash
+# Set keys in the .env file (never in config.toml or a public repo)
+cat >> ~/.manusclaw/.env << 'EOF'
+OPENAI_API_KEY_1=sk-key1
+OPENAI_API_KEY_2=sk-key2
+OPENAI_API_KEY_3=sk-key3
+EOF
+chmod 600 ~/.manusclaw/.env
+```
+
 ---
 
 ## Resource Requirements
@@ -1050,9 +1268,9 @@ Run multiple ManusClaw server instances behind a load balancer:
 
 ```nginx
 upstream manusclaw_backend {
-    server 127.0.0.1:8001;
-    server 127.0.0.1:8002;
-    server 127.0.0.1:8003;
+    server 127.0.0.1:8765;
+    server 127.0.0.1:8766;
+    server 127.0.0.1:8767;
 }
 ```
 
@@ -1072,6 +1290,24 @@ OPENAI_API_KEY_2=sk-key2
 OPENAI_API_KEY_3=sk-key3
 ```
 
+### Model failover (v5)
+
+v5's model failover profiles can help with scaling by automatically routing to alternative providers when one is overloaded:
+
+```yaml
+model_profiles:
+  default:
+    - provider: groq
+      model: llama-3.3-70b-versatile
+      priority: 1
+    - provider: openai
+      model: gpt-4o
+      priority: 2
+    - provider: anthropic
+      model: claude-sonnet-4-20250514
+      priority: 3
+```
+
 ### Caching strategies
 
 For frequently asked questions or repeated operations, consider adding a caching layer:
@@ -1088,7 +1324,7 @@ For large-scale deployments, consider replacing the file-based storage with a da
 - **PostgreSQL** for persistent task and memory storage
 - **S3-compatible storage** for workspace files
 
-These configurations require custom integration and are not provided out of the box by ManusClaw v4.0.0, but the architecture supports extension through the skills system.
+These configurations require custom integration and are not provided out of the box by ManusClaw v5.0.0, but the architecture supports extension through the skills system.
 
 ### Monitoring
 
@@ -1099,9 +1335,9 @@ Set up monitoring for your production deployment:
 sudo apt install -y prometheus-node-exporter
 
 # Configure health check endpoint
-# ManusClaw provides /health endpoint when running in server mode
-curl http://localhost:8000/health
-# Returns: {"status": "ok", "version": "4.0.0"}
+# ManusClaw v5 provides /health endpoint when running in server mode
+curl http://localhost:8765/health
+# Returns: {"status": "ok", "version": "5.0.0"}
 ```
 
 Use the health check endpoint with external monitoring services (UptimeRobot, Pingdom, etc.) to get alerts when your deployment is down.

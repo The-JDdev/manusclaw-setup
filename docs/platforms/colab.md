@@ -1,4 +1,4 @@
-# Google Colab Guide — ManusClaw v4.0.0
+# Google Colab Guide — ManusClaw v5.0.0
 
 Google Colab provides free access to GPU-equipped cloud computing environments, making it an attractive option for running ManusClaw with local models via Ollama or for users who don't have a suitable local machine. This guide walks you through setting up and using ManusClaw in Colab, including how to expose the server for remote access.
 
@@ -42,11 +42,22 @@ Before diving in, be aware of these Colab-specific limitations:
 | **Runtime timeout** | Free: ~90 minutes of inactivity; Pro: ~24 hours |
 | **No persistent storage** | All data is lost when the runtime disconnects |
 | **No interactive terminal** | Colab cells execute code, but you can't run an interactive shell directly |
+| **No audio devices** | Microphone/speakers are not available — v5 voice features (wake word, talk mode) **will not work** |
 | **Resource limits** | RAM (12 GB free), Disk (~70 GB), GPU (T4 free, limited hours) |
 | **Background execution** | The notebook must stay open; closing the tab stops execution |
 | **Network restrictions** | Some ports and protocols may be blocked |
 
 The biggest challenge is the lack of an interactive terminal. ManusClaw's primary interface is a REPL (Read-Eval-Print Loop), which doesn't work natively in Colab. We'll work around this using single-shot mode, the server API, and ngrok tunneling.
+
+### v5 Voice Feature Limitations
+
+ManusClaw v5.0.0 includes voice features (wake word detection, talk mode) that require audio hardware. **These features are NOT available in Google Colab** because:
+
+- No microphone access for speech-to-text
+- No speaker access for text-to-speech
+- No PortAudio support in the Colab environment
+
+All other v5 features work normally: channels, webhooks, SSH, Gmail, multi-agent routing, model failover, canvas (WebChat), session tools, enhanced cron, and all 10+ LLM providers.
 
 ---
 
@@ -55,8 +66,8 @@ The biggest challenge is the lack of an interactive terminal. ManusClaw's primar
 For the fastest possible setup, create a new Colab notebook and paste this into a code cell:
 
 ```python
-# Cell 1: Install ManusClaw
-!pip install manusclaw
+# Cell 1: Install ManusClaw (v5 with all extras)
+!pip install "manusclaw[all]"
 
 # Cell 2: Set API key and run
 import os
@@ -97,16 +108,9 @@ You should see GPU information. If you see "NVIDIA-SMI has failed," the GPU isn'
 In a new code cell:
 
 ```python
-!pip install manusclaw
+# Install ManusClaw v5 with all optional dependencies
+!pip install "manusclaw[all]"
 ```
-
-Verify:
-
-```python
-!manusclaw --version
-```
-
-### Step 4: Set up API keys
 
 **Option A: Direct environment variable (simple but visible in notebook)**
 
@@ -243,7 +247,7 @@ time.sleep(5)
 # Check if the server is running
 import requests
 try:
-    response = requests.get("http://localhost:8000/health")
+    response = requests.get("http://localhost:8765/health")
     print(f"Server status: {response.json()}")
 except Exception as e:
     print(f"Server not ready: {e}")
@@ -257,7 +261,7 @@ import json
 
 def chat(message, session_id="colab-session"):
     """Send a chat message to the ManusClaw server."""
-    url = "http://localhost:8000/api/chat"
+    url = "http://localhost:8765/api/chat"
     payload = {
         "message": message,
         "session_id": session_id
@@ -465,6 +469,15 @@ os.environ['MANUSCLAW_SERVER_API_KEY'] = 'your-secure-random-key'
 
 # Then include the key in requests:
 # curl -H "Authorization: Bearer your-secure-random-key" ...
+
+### ngrok for v5 server mode (port 8765)
+
+The v5 default server port is **8765** (changed from 8000). Make sure ngrok tunnels the correct port:
+
+```python
+# In Step 3, the tunnel connects to port 8765:
+public_url = ngrok.connect(8765)
+print(f"🌐 ManusClaw v5 server: {public_url}")
 ```
 
 ### Disconnect ngrok
@@ -529,9 +542,9 @@ Here's a complete Colab notebook template that you can copy and paste into a new
 
 ```python
 # ============================================================
-# Cell 1: Installation
+# Cell 1: Installation (v5 with all extras)
 # ============================================================
-!pip install manusclaw pyngrok
+!pip install "manusclaw[all]"
 
 # ============================================================
 # Cell 2: Configuration
@@ -541,7 +554,7 @@ from google.colab import userdata
 
 # Set API keys from Colab Secrets
 # Add your keys in the 🔑 sidebar before running this cell
-for key in ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY']:
+for key in ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'MANUSCLAW_API_KEY']:
     try:
         os.environ[key] = userdata.get(key)
         print(f"✓ {key} set")
@@ -578,7 +591,7 @@ try:
     print(f"🌐 ManusClaw server: {public_url}")
 except:
     print("⚠️ Set NGROK_AUTH_TOKEN in secrets for remote access")
-    print("Server running locally at http://localhost:8000")
+    print("Server running locally at http://localhost:8765")
 
 # ============================================================
 # Cell 5: Chat with ManusClaw
@@ -588,7 +601,7 @@ import requests
 def chat(message):
     try:
         r = requests.post(
-            "http://localhost:8000/api/chat",
+            "http://localhost:8765/api/chat",
             json={"message": message, "session_id": "colab"},
             timeout=300
         )
@@ -719,7 +732,7 @@ Free ngrok accounts are limited to 1 tunnel. If you get an error about too many 
 ngrok.kill()
 
 # Then create a new one
-public_url = ngrok.connect(8000)
+public_url = ngrok.connect(8765)
 ```
 
 ### Error: Runtime disconnected

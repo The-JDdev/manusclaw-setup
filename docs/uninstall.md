@@ -1,6 +1,6 @@
-# Uninstall Guide — ManusClaw v4.0.0
+# Uninstall Guide — ManusClaw v5.0.0
 
-This guide covers completely removing ManusClaw from your system. Whether you're switching to a different tool, troubleshooting a persistent issue, or simply cleaning up, follow these steps to remove every trace of ManusClaw.
+This guide covers completely removing ManusClaw v5.0.0 from your system. Whether you're switching to a different tool, troubleshooting a persistent issue, or simply cleaning up, follow these steps to remove every trace of ManusClaw.
 
 > **⚠️ Warning:** Some steps in this guide delete data permanently. Back up anything you want to keep before proceeding.
 
@@ -105,6 +105,10 @@ rm -rf ~/.manusclaw/sessions
 rm -rf ~/.manusclaw/tasks
 rm -rf ~/.manusclaw/skills
 rm -rf ~/.manusclaw/logs
+rm -rf ~/.manusclaw/profiles       # v5 profile directories
+rm -rf ~/.manusclaw/ssh             # v5 SSH gateway keys
+rm -f ~/.manusclaw/cron.yaml        # v5 cron job persistence
+rm -rf ~/.manusclaw/nodes            # v5 canvas node state
 ```
 
 ### Also check for config files in other locations
@@ -178,7 +182,7 @@ docker images | grep manusclaw
 
 # Remove specific images
 docker rmi manusclaw:latest
-docker rmi manusclaw:4.0.0
+docker rmi manusclaw:5.0.0
 
 # Remove all dangling images (unused by any container)
 docker image prune -f
@@ -282,9 +286,15 @@ unset OPENROUTER_API_KEY
 unset MANUSCLAW_CONFIG_DIR
 unset MANUSCLAW_WORKSPACE
 unset MANUSCLAW_LOG_LEVEL
-unset MANUSCLAW_SERVER_API_KEY
+unset MANUSCLAW_API_KEY           # v5 unified key
+unset MANUSCLAW_SERVER_API_KEY     # v4 legacy (remove if still set)
+unset MANUSCLAW_SSH_ENABLED        # v5 SSH gateway
+unset MANUSCLAW_SSH_PORT
 unset MANUSCLAW_PROVIDER
 unset MANUSCLAW_MODEL
+unset PICOVOICE_API_KEY             # v5 voice features
+unset GMAIL_WATCH_TOPIC_NAME       # v5 Gmail
+unset GMAIL_AUTO_REPLY
 ```
 
 ---
@@ -297,14 +307,20 @@ If you set up ManusClaw as a systemd service (for VPS deployments), remove the s
 # Stop the services
 sudo systemctl stop manusclaw
 sudo systemctl stop manusclaw-cron
+sudo systemctl stop manusclaw-ssh        # v5 SSH gateway
 
 # Disable auto-start
 sudo systemctl disable manusclaw
 sudo systemctl disable manusclaw-cron
+sudo systemctl disable manusclaw-ssh    # v5 SSH gateway
 
 # Remove the service files
 sudo rm /etc/systemd/system/manusclaw.service
 sudo rm /etc/systemd/system/manusclaw-cron.service
+sudo rm /etc/systemd/system/manusclaw-ssh.service
+
+# Remove channel service template (v5)
+sudo rm /etc/systemd/system/manusclaw-channel@.service
 
 # Reload systemd
 sudo systemctl daemon-reload
@@ -360,13 +376,19 @@ pip cache purge
 # 7. Remove Docker resources
 docker stop manusclaw-server 2>/dev/null
 docker rm manusclaw-server 2>/dev/null
-docker rmi manusclaw:latest manusclaw:4.0.0 2>/dev/null
+docker rmi manusclaw:latest manusclaw:5.0.0 2>/dev/null
 docker volume rm manusclaw-config manusclaw-workspace 2>/dev/null
 
 # 8. Remove source code (if cloned)
 rm -rf ~/manusclaw
 
-# 9. Remove Python cache
+# 9. Remove v5 state files
+rm -rf ~/.manusclaw/profiles
+rm -rf ~/.manusclaw/ssh
+rm -rf ~/.manusclaw/nodes
+rm -f ~/.manusclaw/cron.yaml
+
+# 10. Remove Python cache
 find ~ -type d -name "__pycache__" -path "*manusclaw*" -exec rm -rf {} + 2>/dev/null
 
 echo "ManusClaw has been completely removed."

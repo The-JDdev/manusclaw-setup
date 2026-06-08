@@ -1,12 +1,20 @@
-# Installation Guide — ManusClaw v4.0.0
+# Installation Guide — ManusClaw v5.0.0
 
-This guide covers every platform and method for installing ManusClaw. Each section is self-contained so you can jump directly to your platform. If you encounter any issues, consult the [Troubleshooting Guide](troubleshooting.md) before opening a GitHub issue.
+This guide covers every platform and method for installing ManusClaw v5.0.0. Each section is self-contained so you can jump directly to your platform. If you encounter any issues, consult the [Troubleshooting Guide](troubleshooting.md) before opening a GitHub issue.
+
+**What's new in v5.0.0:** Voice I/O (Porcupine + ElevenLabs TTS), SSH remote execution, Gmail integration, Matrix messaging, system tray companions, multi-agent Docker Compose profiles, optional dependency groups, and an expanded dependency tree. See the [Changelog](https://github.com/The-JDdev/manusclaw/releases/tag/v5.0.0) for the full list of changes.
 
 ---
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Quick Start (one-liner)](#quick-start-one-liner)
+- [Optional Dependency Groups](#optional-dependency-groups)
+  - [Dependency Group Reference Table](#dependency-group-reference-table)
+  - [Installing All Optional Dependencies](#installing-all-optional-dependencies)
+  - [Installing Individual Groups](#installing-individual-groups)
+  - [Dependency Tree (v5.0.0)](#dependency-tree-v500)
 - [Linux Installation](#linux-installation)
   - [Ubuntu / Debian](#ubuntu--debian)
   - [Fedora / RHEL / CentOS](#fedora--rhel--centos)
@@ -18,32 +26,236 @@ This guide covers every platform and method for installing ManusClaw. Each secti
   - [Native Windows](#native-windows)
   - [WSL2 (Recommended)](#wsl2-recommended)
 - [Docker Installation](#docker-installation)
+  - [Docker Compose Profiles](#docker-compose-profiles)
+  - [Docker Compose Profiles Explained](#docker-compose-profiles-explained)
+  - [Volume Mounts](#docker-volume-mounts)
 - [Termux (Android) Installation](#termux-android-installation)
 - [Google Colab Installation](#google-colab-installation)
 - [VPS / Cloud Server Installation](#vps--cloud-server-installation)
+  - [General VPS Setup](#general-vps-setup-applies-to-all-providers)
   - [DigitalOcean](#digitalocean)
   - [AWS EC2](#aws-ec2)
   - [Google Cloud Platform](#google-cloud-platform)
   - [Microsoft Azure](#microsoft-azure)
 - [Verification](#verification)
 - [Post-Installation Setup](#post-installation-setup)
+- [Using the Install Scripts](#using-the-install-scripts)
+  - [Linux / macOS — install.sh](#linux--macos---installsh)
+  - [Windows — install.ps1](#windows---installps1)
+  - [Termux — setup-termux.sh](#termux---setup-termuxsh)
+- [Using pyenv (Alternative Python Installation)](#using-pyenv-alternative-python-installation)
+- [Virtual Environments](#virtual-environments)
+- [Upgrading from v4.0.0](#upgrading-from-v400)
 
 ---
 
 ## Prerequisites
 
-Before installing ManusClaw, ensure your system meets these baseline requirements:
+Before installing ManusClaw v5.0.0, ensure your system meets these baseline requirements:
 
 | Requirement | Details |
 |-------------|---------|
-| **Python** | 3.11 or newer (3.12+ recommended) |
+| **Python** | **3.11 minimum** (3.12+ recommended; 3.13 supported) |
 | **pip** | Latest version (bundled with Python, but should be updated) |
 | **Git** | For cloning the repository if installing from source |
 | **Internet** | Required for API-based providers and package downloads |
-| **Disk Space** | At least 500 MB free (2 GB+ recommended for Playwright browsers) |
-| **RAM** | 512 MB minimum (2 GB+ recommended; more for local models) |
+| **Disk Space** | At least 500 MB free (2 GB+ recommended for Playwright browsers; 4 GB+ with voice dependencies) |
+| **RAM** | 512 MB minimum (2 GB+ recommended; more for local models or voice features) |
+| **Audio** | Microphone + speakers (optional — only needed for `[voice]` group) |
 
-**Why Python 3.11+?** ManusClaw uses modern Python features including the `tomllib` module (added in 3.11), improved error messages, and performance optimizations that are not available in older Python versions. Python 3.11 also includes significant speed improvements (up to 25% faster than 3.10) which directly benefit the agent's responsiveness.
+### Why Python 3.11+?
+
+ManusClaw v5.0.0 requires Python 3.11 as the absolute minimum. This is a hard requirement — **Python 3.10 and below will not work**. The reasons are:
+
+- **`tomllib` module** — added in 3.11, used for parsing `pyproject.toml` configuration files throughout ManusClaw
+- **`ExceptionGroup` and `except*` syntax** — used in the multi-agent orchestrator for handling concurrent failures
+- **`typing.ParamSpec` enhancements** — used in the plugin system for type-safe hook registration
+- **Performance** — Python 3.11 includes up to 25% speed improvements over 3.10, and 3.12 adds another 5-10%, which directly benefit agent responsiveness
+- **`TaskGroup`** — the structured concurrency primitive used in the SSH and voice subsystems
+
+### Platform Support Matrix
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Ubuntu 22.04+ | ✅ Full | Install Python 3.11 via deadsnakes PPA |
+| Ubuntu 24.04+ | ✅ Full | Python 3.12 included by default |
+| Debian 12+ | ✅ Full | Python 3.11 included by default |
+| Fedora 37+ | ✅ Full | Python 3.12 included by default |
+| Arch Linux | ✅ Full | Latest Python always available |
+| macOS (Intel) | ✅ Full | Install via Homebrew |
+| macOS (Apple Silicon) | ✅ Full | Native ARM64 support |
+| Windows 10/11 | ✅ Full | Native or WSL2 |
+| WSL2 | ✅ Full (recommended) | Best Windows experience |
+| Docker | ✅ Full | Three Compose profiles available |
+| Termux (Android) | ✅ Partial | No Playwright; voice may require extra steps |
+| Google Colab | ✅ Partial | Single-shot mode; no interactive shell |
+| VPS / Cloud | ✅ Full | Any Linux provider |
+
+---
+
+## Quick Start (one-liner)
+
+If you just want to get started and you already have Python 3.11+ and pip installed:
+
+```bash
+# Minimum install (core features only)
+pip install manusclaw
+
+# Install with ALL optional dependencies (voice, SSH, Gmail, Matrix, companion)
+pip install manusclaw[all-plus]
+```
+
+Then configure your API key and run:
+
+```bash
+export OPENAI_API_KEY="sk-your-key-here"
+manusclaw
+```
+
+> **New in v5.0.0:** The `[all-plus]` extra installs every optional dependency group in one command. See [Optional Dependency Groups](#optional-dependency-groups) for details.
+
+---
+
+## Optional Dependency Groups
+
+Starting with v5.0.0, ManusClaw uses **PEP 621 dependency groups** to organize optional features. The core package includes everything you need for basic agent operation (LLM interaction, web search, file I/O, Playwright browsing). Additional capabilities are installed via optional extras.
+
+This design keeps the base install lightweight while allowing you to opt in to specific features without pulling in unnecessary dependencies.
+
+### Dependency Group Reference Table
+
+| Extra Name | Install Command | What It Adds |
+|-----------|----------------|-------------|
+| `voice` | `pip install manusclaw[voice]` | Wake-word detection (Porcupine), speech-to-text (speech_recognition), text-to-speech (pyttsx3, elevenlabs), audio capture (sounddevice) |
+| `ssh` | `pip install manusclaw[ssh]` | Remote SSH command execution via asyncssh |
+| `gmail` | `pip install manusclaw[gmail]` | Gmail read/send integration via google-api-python-client |
+| `matrix` | `pip install manusclaw[matrix]` | Matrix protocol messaging via matrix-nio |
+| `companion` | `pip install manusclaw[companion]` | System tray icon / menu bar companion app via pystray (Linux/Windows) or rumps (macOS) |
+| `all-plus` | `pip install manusclaw[all-plus]` | **All of the above** in a single install |
+
+### Installing All Optional Dependencies
+
+The `[all-plus]` meta-extra is the simplest way to get everything:
+
+```bash
+pip install manusclaw[all-plus]
+```
+
+This is equivalent to:
+
+```bash
+pip install manusclaw[voice,ssh,gmail,matrix,companion]
+```
+
+> **Tip:** Use `[all-plus]` for development and evaluation. For production deployments, install only the groups you actually need to minimize attack surface and container image size.
+
+### Installing Individual Groups
+
+You can install any combination of groups. pip will merge them correctly:
+
+```bash
+# Just voice + SSH
+pip install manusclaw[voice,ssh]
+
+# Gmail + Matrix for notification workflows
+pip install manusclaw[gmail,matrix]
+
+# Add groups to an existing editable install
+pip install -e ".[voice,companion]"
+```
+
+You can also add groups after the initial install:
+
+```bash
+# Core is already installed; add voice support later
+pip install manusclaw[voice]
+```
+
+pip detects the existing installation and only installs the additional dependencies.
+
+### Dependency Tree (v5.0.0)
+
+Below is the complete dependency tree for ManusClaw v5.0.0. Dependencies marked with `*` are **core** (always installed). Dependencies marked with `[group]` are installed only when that optional group is requested.
+
+#### Core Dependencies (always installed)
+
+```
+manusclaw v5.0.0
+├── python >= 3.11
+├── pip >= 23.0
+│
+├── * openai >= 1.12.0
+├── * anthropic >= 0.25.0
+├── * httpx >= 0.27.0
+├── * pydantic >= 2.5.0
+├── * pydantic-settings >= 2.1.0
+├── * tomli (on Python <3.11; stdlib tomllib on 3.11+)
+├── * rich >= 13.0.0
+├── * click >= 8.1.0
+├── * uvicorn >= 0.27.0
+├── * fastapi >= 0.110.0
+├── * python-dotenv >= 1.0.0
+├── * playwright >= 1.42.0
+├── * duckduckgo-search >= 6.0.0
+├── * pathspec >= 0.12.0
+├── * jinja2 >= 3.1.0
+├── * aiofiles >= 23.2.0
+├── * tenacity >= 8.2.0
+└── * tiktoken >= 0.5.0
+```
+
+#### Optional Group: `[voice]`
+
+```
+manusclaw[voice]
+├── * pvporcupine >= 3.0.0         # Wake-word detection (Porcupine)
+├── * sounddevice >= 0.4.6         # Cross-platform audio capture/playback
+├── * speech-recognition >= 3.10.0 # Speech-to-text (multiple engines)
+├── * pyttsx3 >= 2.90              # Offline text-to-speech
+└── * elevenlabs >= 1.0.0          # Cloud text-to-speech (ElevenLabs API)
+```
+
+#### Optional Group: `[ssh]`
+
+```
+manusclaw[ssh]
+└── * asyncssh >= 2.14.0           # Async SSH2 protocol client
+```
+
+#### Optional Group: `[gmail]`
+
+```
+manusclaw[gmail]
+└── * google-api-python-client >= 2.120.0  # Gmail API client
+```
+
+#### Optional Group: `[matrix]`
+
+```
+manusclaw[matrix]
+└── * matrix-nio >= 0.24.0         # Matrix client library (async)
+```
+
+#### Optional Group: `[companion]`
+
+```
+manusclaw[companion]
+├── * pystray >= 0.19.0            # System tray (Linux/Windows)
+└── * rumps >= 0.4.0               # macOS menu bar helper (Objective-C bridge)
+```
+
+#### Transitive Dependencies of Note
+
+Some optional groups pull in additional transitive dependencies that are worth knowing about:
+
+| Transitive Dependency | Pulled In By | Purpose |
+|-----------------------|-------------|---------|
+| `PyAudio` | `pvporcupine`, `speech_recognition` | Low-level audio I/O on Python |
+| `pynput` | `pystray` | Keyboard/mouse monitoring for companion |
+| `pyobjc` | `rumps` | Objective-C bridge for macOS menu bar |
+| `oauthlib` | `google-api-python-client` | OAuth2 flow for Gmail authentication |
+| `google-auth` | `google-api-python-client` | Google service account / user auth |
+| `pycryptodome` | `matrix-nio` | End-to-end encryption for Matrix |
 
 ---
 
@@ -63,7 +275,15 @@ sudo apt update && sudo apt upgrade -y
 
 #### Step 2: Install Python 3.11+
 
-**Ubuntu 22.04+ and Debian 12+** ship with Python 3.10+ or 3.11 by default. Check your version:
+**Ubuntu 24.04** ships with Python 3.12 by default — you're already set.
+
+**Ubuntu 22.04** ships with Python 3.10, which is **too old for v5.0.0**. You need 3.11+.
+
+**Debian 12 (Bookworm)** ships with Python 3.11 — you're set.
+
+**Debian 11 (Bullseye)** ships with Python 3.9 — too old. You'll need the steps below.
+
+Check your current version:
 
 ```bash
 python3 --version
@@ -71,7 +291,7 @@ python3 --version
 
 If you already have Python 3.11+, skip to Step 3.
 
-**Ubuntu 20.04 and Debian 11** ship with Python 3.8 or 3.9, which is too old. You need to install a newer version:
+**Install Python 3.11 on Ubuntu / older Debian:**
 
 ```bash
 # Add the deadsnakes PPA (Ubuntu only)
@@ -79,7 +299,7 @@ sudo apt install -y software-properties-common
 sudo add-apt-repository -y ppa:deadsnakes/ppa
 sudo apt update
 
-# Install Python 3.11
+# Install Python 3.11 and associated packages
 sudo apt install -y python3.11 python3.11-venv python3.11-dev
 
 # Set Python 3.11 as the default (optional but recommended)
@@ -94,13 +314,18 @@ For **Debian 11**, you may need to build Python from source or use the `pyenv` m
 # Install pip
 sudo apt install -y python3-pip
 
-# Install other dependencies that ManusClaw or its packages may need
+# Install system-level dependencies that ManusClaw or its packages may need
 sudo apt install -y build-essential libssl-dev libffi-dev \
     python3-dev python3-venv git curl
+
+# Additional dependencies for the [voice] optional group
+sudo apt install -y portaudio19-dev libasound2-dev
 
 # Upgrade pip to the latest version
 python3 -m pip install --upgrade pip
 ```
+
+> **Note:** The `portaudio19-dev` and `libasound2-dev` packages are only needed if you plan to install the `[voice]` optional group. They provide the system-level audio libraries required by `pvporcupine` and `speech_recognition`.
 
 #### Step 4: Install ManusClaw
 
@@ -109,7 +334,11 @@ You have two options: install from PyPI (recommended) or install from source.
 **Option A: Install from PyPI (recommended)**
 
 ```bash
+# Core only
 pip install manusclaw
+
+# Or with all optional dependencies
+pip install manusclaw[all-plus]
 ```
 
 **Option B: Install from source**
@@ -121,13 +350,18 @@ Installing from source gives you access to the latest development changes before
 git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
 
-# Install in editable mode (changes to source are reflected immediately)
+# Install in editable mode (core only)
 pip install -e .
 
+# Or install in editable mode with all optional dependencies
+pip install -e ".[all-plus]"
+
 # Or install a specific version/tag
-git checkout v4.0.0
-pip install -e .
+git checkout v5.0.0
+pip install -e ".[all-plus]"
 ```
+
+> **New in v5.0.0:** Source installs support the same optional dependency groups as PyPI installs. Use `pip install -e ".[voice,ssh]"` for a targeted editable install.
 
 #### Step 5: Install Playwright browsers (optional but recommended)
 
@@ -151,7 +385,21 @@ The `--with-deps` flag automatically installs system-level dependencies that Chr
 manusclaw --version
 ```
 
-You should see output like `ManusClaw v4.0.0`. If you see an error, consult the [Troubleshooting Guide](troubleshooting.md).
+You should see output like `ManusClaw v5.0.0`. If you see an error, consult the [Troubleshooting Guide](troubleshooting.md).
+
+#### Step 7: Verify optional groups (if installed)
+
+If you installed the `[voice]` group, verify audio capture:
+
+```bash
+python3 -c "import sounddevice; print('Audio devices:', sounddevice.query_devices())"
+```
+
+If you installed the `[ssh]` group, verify asyncssh:
+
+```bash
+python3 -c "import asyncssh; print('asyncssh', asyncssh.__version__)"
+```
 
 ---
 
@@ -167,7 +415,7 @@ sudo dnf update -y
 
 #### Step 2: Install Python 3.11+
 
-**Fedora 37+** ships with Python 3.11+ by default. Check your version:
+**Fedora 39+** ships with Python 3.12+ by default. Check your version:
 
 ```bash
 python3 --version
@@ -191,6 +439,9 @@ sudo dnf install -y python3.11 python3.11-pip python3.11-devel
 ```bash
 sudo dnf install -y gcc gcc-c++ make openssl-devel libffi-devel \
     python3-devel git curl
+
+# Optional: for [voice] group
+sudo dnf install -y portaudio-devel alsa-lib-devel
 ```
 
 #### Step 4: Install ManusClaw
@@ -199,8 +450,11 @@ sudo dnf install -y gcc gcc-c++ make openssl-devel libffi-devel \
 # Upgrade pip
 python3 -m pip install --upgrade pip
 
-# Install ManusClaw
+# Install ManusClaw (core)
 pip install manusclaw
+
+# Or with all optional dependencies
+pip install manusclaw[all-plus]
 ```
 
 #### Step 5: Install Playwright browsers
@@ -233,6 +487,9 @@ sudo pacman -Syu
 
 ```bash
 sudo pacman -S --needed python python-pip python-virtualenv git curl base-devel
+
+# Optional: for [voice] group
+sudo pacman -S --needed portaudio
 ```
 
 Arch's Python is typically the latest stable release (3.12+ at the time of writing), so you should be all set. Verify:
@@ -244,7 +501,11 @@ python3 --version
 #### Step 3: Install ManusClaw
 
 ```bash
+# Core only
 pip install manusclaw
+
+# Or with all optional dependencies
+pip install manusclaw[all-plus]
 ```
 
 If you prefer to use Arch's AUR (Arch User Repository), check if a `manusclaw` package exists:
@@ -257,7 +518,7 @@ yay -S manusclaw
 paru -S manusclaw
 ```
 
-> **Note:** AUR packages are community-maintained and may not always be up to date. The PyPI method (`pip install`) is the most reliable way to get the latest version.
+> **Note:** AUR packages are community-maintained and may not always be up to date. The PyPI method (`pip install`) is the most reliable way to get the latest version. AUR packages also may not support the `[all-plus]` extras syntax.
 
 #### Step 4: Install Playwright browsers
 
@@ -318,8 +579,15 @@ brew link python@3.11
 
 ```bash
 python3.11 -m pip install --upgrade pip
+
+# Core only
 pip3.11 install manusclaw
+
+# Or with all optional dependencies
+pip3.11 install manusclaw[all-plus]
 ```
+
+> **macOS Note for `[companion]` group:** On macOS, the companion app uses `rumps` (built on PyObjC) which requires Xcode Command Line Tools. These are typically installed automatically by Homebrew. If you get errors, run `xcode-select --install`.
 
 #### Step 4: Install Playwright browsers
 
@@ -337,7 +605,7 @@ manusclaw --version
 
 ### Apple Silicon (M1/M2/M3/M4)
 
-Apple Silicon Macs provide excellent performance for running ManusClaw, especially if you use Ollama to run local models on the Neural Engine / GPU.
+Apple Silicon Macs provide excellent performance for running ManusClaw, especially if you use Ollama to run local models on the Neural Engine / GPU. The v5.0.0 voice features also benefit from Apple Silicon's efficient audio processing.
 
 #### Step 1: Install Homebrew (if not already installed)
 
@@ -373,7 +641,12 @@ file $(which python3.11)
 
 ```bash
 python3.11 -m pip install --upgrade pip
+
+# Core only
 pip3.11 install manusclaw
+
+# Or with all optional dependencies
+pip3.11 install manusclaw[all-plus]
 ```
 
 #### Step 4: Install Playwright browsers
@@ -396,7 +669,17 @@ ollama pull llama3
 
 See the [Configuration Guide](configuration.md) for details on configuring ManusClaw to use Ollama.
 
-#### Step 6: Verify
+#### Step 6: (Optional) Set up voice features on macOS
+
+The `[voice]` group works out of the box on macOS with the built-in microphone. For the Porcupine wake-word engine, you'll need a Picovoice access key (free tier allows 3 wake words):
+
+```bash
+export PORCUPINE_ACCESS_KEY="your-access-key-here"
+```
+
+Add this to your `~/.zshrc` or `~/.manusclaw/.env` for persistence.
+
+#### Step 7: Verify
 
 ```bash
 manusclaw --version
@@ -446,8 +729,11 @@ Download Git from [git-scm.com](https://git-scm.com/download/win) and run the in
 # Upgrade pip
 python -m pip install --upgrade pip
 
-# Install ManusClaw
+# Core only
 pip install manusclaw
+
+# Or with all optional dependencies
+pip install manusclaw[all-plus]
 ```
 
 #### Step 4: Install Playwright browsers
@@ -464,18 +750,20 @@ playwright install chromium
 manusclaw --version
 ```
 
+#### Step 6: Windows-specific notes for optional groups
+
+**`[voice]` group on Windows:**
+The `pyttsx3` TTS engine uses the Microsoft Speech API (SAPI5) on Windows, which works out of the box. The `sounddevice` package requires PortAudio, which is included as a pre-built wheel for Windows on PyPI — no manual installation needed.
+
+**`[companion]` group on Windows:**
+The `pystray` package works natively on Windows 10/11 with the system tray. No additional system packages are required.
+
+**`[ssh]` group on Windows:**
+The `asyncssh` package is pure Python and works on Windows without any system-level OpenSSH dependency.
+
 #### Alternative: Using the PowerShell install script
 
-ManusClaw provides an `install.ps1` script for automated Windows installation:
-
-```powershell
-# Clone the repository first
-git clone https://github.com/The-JDdev/manusclaw.git
-cd manusclaw
-
-# Run the PowerShell install script
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
+ManusClaw provides an `install.ps1` script for automated Windows installation. See [Using the Install Scripts](#using-the-install-scripts) for details.
 
 ---
 
@@ -513,9 +801,13 @@ sudo add-apt-repository -y ppa:deadsnakes/ppa
 sudo apt update
 sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
 
-# Install ManusClaw
+# Install system dependencies
+sudo apt install -y build-essential libssl-dev libffi-dev python3-dev \
+    python3-venv git curl portaudio19-dev libasound2-dev
+
+# Install ManusClaw with all optional dependencies
 python3.11 -m pip install --upgrade pip
-pip install manusclaw
+pip install manusclaw[all-plus]
 
 # Install Playwright browsers
 playwright install --with-deps chromium
@@ -524,7 +816,18 @@ playwright install --with-deps chromium
 manusclaw --version
 ```
 
-#### Step 3: Access Windows files from WSL2
+#### Step 3: Audio access in WSL2 (for `[voice]` group)
+
+Starting with WSL2 on Windows 11 (build 22449+), you can access your Windows audio devices. This is required for the `[voice]` optional group. Ensure your WSL2 has audio forwarding enabled:
+
+```bash
+# Check if audio devices are visible in WSL2
+python3 -c "import sounddevice; print(sounddevice.query_devices())"
+```
+
+If no devices are listed, you may need to update Windows or use the native Windows installation instead for voice features.
+
+#### Step 4: Access Windows files from WSL2
 
 Your Windows C: drive is mounted at `/mnt/c/` in WSL2. You can access your Windows files and vice versa:
 
@@ -570,7 +873,7 @@ Download and install [Docker Desktop for Windows](https://www.docker.com/product
 
 ### Step 2: Pull and run the ManusClaw Docker image
 
-The ManusClaw repository includes a Dockerfile and docker-compose.yml. You can either use the pre-built image or build from source.
+The ManusClaw repository includes a Dockerfile and `docker-compose.yml` with **profiles** (new in v5.0.0). You can either use the pre-built image or build from source.
 
 **Option A: Using the pre-built image (when available):**
 
@@ -579,7 +882,7 @@ docker run -it --rm \
   -e OPENAI_API_KEY="sk-your-key-here" \
   -v $(pwd)/workspace:/app/workspace \
   -v $(pwd)/config:/root/.manusclaw \
-  manusclaw/manusclaw:latest
+  manusclaw/manusclaw:v5.0.0
 ```
 
 **Option B: Build from source:**
@@ -590,50 +893,220 @@ git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
 
 # Build the image
-docker build -t manusclaw .
+docker build -t manusclaw:v5.0.0 .
 
 # Run the container
 docker run -it --rm \
   -e OPENAI_API_KEY="sk-your-key-here" \
   -v $(pwd)/workspace:/app/workspace \
   -v $(pwd)/config:/root/.manusclaw \
-  manusclaw
+  manusclaw:v5.0.0
 ```
 
-### Step 3: Using docker-compose
+### Docker Compose Profiles
 
-For more manageable configurations, use docker-compose:
+Starting with v5.0.0, the `docker-compose.yml` uses **Compose profiles** instead of the deprecated `version: "3.8"` top-level key. Profiles allow you to define multiple service configurations in a single compose file and selectively start them.
+
+The available profiles are:
+
+| Profile | Services Started | Use Case |
+|---------|-----------------|----------|
+| `server` | `manusclaw-server`, `nginx`, `redis` | Production web server with reverse proxy and caching |
+| `cli` | `manusclaw-cli` | Interactive CLI agent in a container |
+| `multi-agent` | `manusclaw-server`, `manusclaw-worker-1`, `manusclaw-worker-2`, `redis`, `rabbitmq` | Multi-agent orchestration with task queue |
+
+#### Starting specific profiles
 
 ```bash
-# Clone the repository
-git clone https://github.com/The-JDdev/manusclaw.git
-cd manusclaw
+# Start the server profile
+docker compose --profile server up -d
 
-# Edit the .env file with your API keys
-cp .env.example .env
-nano .env
+# Start the CLI profile (interactive)
+docker compose --profile cli up
 
-# Start ManusClaw
-docker compose up -d
+# Start the multi-agent profile
+docker compose --profile multi-agent up -d
 
-# View logs
-docker compose logs -f manusclaw
-
-# Stop ManusClaw
-docker compose down
+# Start multiple profiles simultaneously
+docker compose --profile server --profile multi-agent up -d
 ```
 
-The `docker-compose.yml` file handles volume mounts, environment variables, port forwarding, and restart policies automatically.
+#### Example: docker-compose.yml with profiles
 
-### Docker volume explanations
+Here is the structure of the v5.0.0 `docker-compose.yml`. The `version` key is intentionally omitted (per Docker Compose v2+ best practices):
+
+```yaml
+# docker-compose.yml — ManusClaw v5.0.0
+# No "version" key (Docker Compose v2+ ignores it)
+
+services:
+  # ── Server profile ──────────────────────────────────────────
+  manusclaw-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["server", "multi-agent"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspace:/app/workspace
+      - ./config:/root/.manusclaw
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    profiles: ["server"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - manusclaw-server
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["server", "multi-agent"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Multi-agent profile ─────────────────────────────────────
+  manusclaw-worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["multi-agent"]
+    command: manusclaw-multi worker --id worker-1
+    volumes:
+      - ./workspace:/app/workspace
+      - ./config:/root/.manusclaw
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  manusclaw-worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["multi-agent"]
+    command: manusclaw-multi worker --id worker-2
+    volumes:
+      - ./workspace:/app/workspace
+      - ./config:/root/.manusclaw
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    profiles: ["multi-agent"]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── CLI profile ─────────────────────────────────────────────
+  manusclaw-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["cli"]
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./workspace:/app/workspace
+      - ./config:/root/.manusclaw
+    env_file:
+      - .env
+```
+
+#### Docker Compose profiles explained
+
+**`server` profile:**
+- Starts `manusclaw-server`, `nginx`, and `redis`
+- `nginx` acts as a reverse proxy with optional SSL termination
+- `redis` provides caching and session storage
+- Best for: production deployments, always-on access, team use
+
+**`cli` profile:**
+- Starts a single interactive `manusclaw-cli` container
+- `stdin_open: true` and `tty: true` enable interactive terminal use
+- Best for: quick testing, single-user sessions, CI/CD pipelines
+
+**`multi-agent` profile:**
+- Starts the server, two worker agents, `redis`, and `rabbitmq`
+- Workers communicate via RabbitMQ message queue for task distribution
+- `redis` stores shared state and intermediate results
+- Best for: parallel task execution, complex multi-step workflows
+- You can scale workers by adding more `manusclaw-worker-N` services or using `docker compose up --scale manusclaw-worker-1=5`
+
+### Docker volume mounts
 
 | Volume Mount | Purpose |
 |-------------|---------|
 | `./workspace:/app/workspace` | Maps your local workspace directory into the container so ManusClaw can read/write your project files |
 | `./config:/root/.manusclaw` | Persists your configuration (config.toml, .env, MEMORY.md, USER.md) across container restarts |
 | `./skills:/app/skills` | (Optional) Mount custom skills into the container |
+| `./nginx/ssl:/etc/nginx/ssl` | (Server profile only) Mount SSL certificates for HTTPS |
 
 > **Important:** Without volume mounts, all data is lost when the container is removed. Always use volume mounts for persistent data.
+
+### Docker and optional dependency groups
+
+To build a Docker image that includes specific optional dependency groups, you have two options:
+
+**Option A: Build with build args**
+
+```bash
+docker build \
+  --build-arg EXTRAS=all-plus \
+  -t manusclaw:v5.0.0-full .
+```
+
+The Dockerfile should include:
+
+```dockerfile
+ARG EXTRAS=""
+RUN pip install -e ".${EXTRAS:+[$EXTRAS]}"
+```
+
+**Option B: Use pre-built variant images**
+
+When official images are available, they come in variants:
+
+```bash
+docker pull manusclaw/manusclaw:v5.0.0           # Core only
+docker pull manusclaw/manusclaw:v5.0.0-voice     # Core + voice
+docker pull manusclaw/manusclaw:v5.0.0-full      # All optional deps
+```
 
 ---
 
@@ -658,6 +1131,9 @@ pkg update && pkg upgrade -y
 
 ```bash
 pkg install -y python python-pip git build-essential binutils
+
+# Optional: for [voice] group (limited on Termux)
+pkg install -y portaudio
 ```
 
 Termux's `python` package typically provides Python 3.11+. Verify:
@@ -669,20 +1145,37 @@ python --version
 ### Step 4: Install ManusClaw
 
 ```bash
+# Core only
 pip install manusclaw
+
+# With SSH support (works well on Termux)
+pip install manusclaw[ssh]
+
+# With all optional dependencies (some may have limited functionality)
+pip install manusclaw[all-plus]
 ```
 
-> **Note:** Some dependencies may fail to compile on Termux due to missing system libraries. If you encounter build errors, check the [Troubleshooting Guide](troubleshooting.md) for Termux-specific solutions.
+> **Note:** Some dependencies may fail to compile on Termux due to missing system libraries. If you encounter build errors, check the [Troubleshooting Guide](troubleshooting.md) for Termux-specific solutions. The `[companion]` group is particularly problematic on Termux since Android does not have a traditional system tray.
 
 ### Step 5: Using the Termux setup script
 
-ManusClaw includes a dedicated Termux setup script that handles the entire installation process, including dependency resolution:
+ManusClaw v5.0.0 includes a dedicated Termux setup script (`setup-termux.sh`) that handles the entire installation process, including dependency resolution:
 
 ```bash
 git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
-bash setup_termux.sh
+bash setup-termux.sh
 ```
+
+The `setup-termux.sh` script:
+- Detects your Termux environment and Android API level
+- Installs all required system packages via `pkg`
+- Installs Python 3.11+ if the bundled version is too old
+- Installs ManusClaw with compatible optional groups
+- Configures recommended environment variables
+- Performs basic verification
+
+> **Note:** The script avoids installing groups known to have issues on Termux (e.g., `[companion]`). If you want to force-install all groups, use `bash setup-termux.sh --full`.
 
 ### Step 6: Configure API keys
 
@@ -703,6 +1196,8 @@ manusclaw --version
 Be aware of these limitations when running ManusClaw on Termux:
 
 - **Playwright browsers will not work** — Termux does not support graphical browser automation. Web search via DuckDuckGo's API still works fine.
+- **Voice features are limited** — Porcupine wake-word detection may work but sounddevice has limited audio device support on Android. TTS via pyttsx3 is not available on Termux.
+- **Companion tray icon does not work** — Android has no system tray. The `[companion]` group will install but the tray app will not function.
 - **Memory constraints** — Android may kill background processes. Use `termux-wake-lock` to prevent this:
   ```bash
   termux-wake-lock
@@ -712,6 +1207,7 @@ Be aware of these limitations when running ManusClaw on Termux:
   termux-setup-storage
   ```
   This creates a `~/storage/` directory with symlinks to shared storage locations.
+- **SSH works well** — The `[ssh]` group is fully functional on Termux and can be used for remote command execution from your Android device.
 
 ---
 
@@ -728,12 +1224,17 @@ Go to [colab.research.google.com](https://colab.research.google.com/) and create
 Add a code cell and run:
 
 ```python
-# Install ManusClaw
+# Install ManusClaw v5.0.0
 !pip install manusclaw
+
+# Or with specific optional groups
+!pip install "manusclaw[ssh,gmail]"
 
 # Verify installation
 !manusclaw --version
 ```
+
+> **Note:** Colab typically runs Python 3.11+, so v5.0.0 requirements are met. The `[voice]` and `[companion]` groups will not function in Colab since there's no audio hardware or system tray.
 
 ### Step 3: Set API keys
 
@@ -777,6 +1278,17 @@ public_url = ngrok.connect(8000)
 print(f"ManusClaw server accessible at: {public_url}")
 ```
 
+### Step 6: (Optional) Using the `[gmail]` group in Colab
+
+The `[gmail]` group is particularly useful in Colab for email automation workflows. After installing:
+
+```python
+!pip install "manusclaw[gmail]"
+
+# You'll need to set up OAuth2 credentials
+# See the Configuration Guide for Gmail setup
+```
+
 ---
 
 ## VPS / Cloud Server Installation
@@ -790,8 +1302,23 @@ Before diving into provider-specific instructions, here's the general workflow t
 1. **Choose an OS image:** Ubuntu 22.04 LTS or 24.04 LTS are recommended for the best compatibility and community support.
 2. **SSH into your server:** `ssh root@your-server-ip` or `ssh user@your-server-ip`
 3. **Update the system:** `sudo apt update && sudo apt upgrade -y`
-4. **Install Python and ManusClaw** following the Linux instructions above
+4. **Install Python 3.11+ and ManusClaw** following the Linux instructions above
 5. **Configure as a systemd service** (see the [Deployment Guide](deployment.md) for details)
+6. **Set up a firewall:** At minimum, open SSH (22) and HTTP/HTTPS (80, 443) if using server mode
+
+#### VPS-specific dependency considerations
+
+For VPS deployments, consider which optional dependency groups you need:
+
+| Use Case | Recommended Groups | Notes |
+|----------|-------------------|-------|
+| Basic API agent | None (core only) | Minimal footprint, fast startup |
+| Web browsing agent | None (core) | Playwright included in core |
+| Voice-enabled agent | `[voice]` | Requires audio device or ALSA dummy |
+| Remote execution agent | `[ssh]` | Pure Python, no system deps needed |
+| Email automation agent | `[gmail]` | Requires OAuth2 credential setup |
+| Team chat integration | `[matrix]` | Requires Matrix homeserver |
+| Always-on with tray | `[companion]` | Headless VPS: tray won't show, but API works |
 
 ### DigitalOcean
 
@@ -824,8 +1351,14 @@ apt update && apt upgrade -y
 apt install -y python3.11 python3.11-venv python3.11-dev python3-pip \
     build-essential git curl
 
+# Optional: audio libraries for [voice] group
+apt install -y portaudio19-dev libasound2-dev
+
 # Install ManusClaw
 pip install manusclaw
+
+# Or with specific groups for your use case
+pip install manusclaw[ssh,gmail,matrix]
 
 # Install Playwright browsers (optional)
 playwright install --with-deps chromium
@@ -845,7 +1378,7 @@ Amazon EC2 provides the most extensive range of instance types, including GPU in
 
 1. Go to the [AWS EC2 Console](https://console.aws.amazon.com/ec2/)
 2. Click "Launch Instance"
-3. Choose **Ubuntu Server 22.04 LTS** AMI
+3. Choose **Ubuntu Server 22.04 LTS** or **Ubuntu Server 24.04 LTS** AMI
 4. Choose instance type:
    - **t3.micro** (Free Tier eligible): For API-based usage
    - **g4dn.xlarge** ($0.526/hr): For GPU-accelerated local models
@@ -875,8 +1408,11 @@ sudo apt update
 sudo apt install -y python3.11 python3.11-venv python3.11-dev python3-pip \
     build-essential git curl
 
-# Install ManusClaw
-pip install manusclaw
+# Optional: for [voice] group
+sudo apt install -y portaudio19-dev libasound2-dev
+
+# Install ManusClaw with desired groups
+pip install manusclaw[all-plus]
 
 # Install Playwright browsers
 playwright install --with-deps chromium
@@ -925,7 +1461,7 @@ gcloud compute ssh --zone your-zone your-instance-name
 
 #### Step 3: Install ManusClaw
 
-Follow the same Linux installation instructions as above.
+Follow the same Linux installation instructions as above. For GCP, the `gmail` group works especially well since you can use Google Cloud service accounts for authentication.
 
 ---
 
@@ -937,7 +1473,7 @@ Azure provides VMs with good enterprise integration and hybrid cloud support.
 
 1. Go to [Azure Portal](https://portal.azure.com/)
 2. Click "Create a resource" → "Virtual machine"
-3. Choose **Ubuntu Server 22.04 LTS**
+3. Choose **Ubuntu Server 22.04 LTS** or **Ubuntu Server 24.04 LTS**
 4. Choose VM size:
    - **B1s** (Free Tier eligible): For basic API usage
    - **D2s_v3**: For standard workloads
@@ -959,24 +1495,25 @@ Follow the same Linux installation instructions as above.
 
 ## Verification
 
-After installing ManusClaw on any platform, run these verification steps to ensure everything is working correctly:
+After installing ManusClaw on any platform, run these verification steps to ensure everything is working correctly.
 
 ### Check version
 
 ```bash
 manusclaw --version
-# Expected output: ManusClaw v4.0.0
+# Expected output: ManusClaw v5.0.0
 ```
 
 ### Check available commands
 
-ManusClaw installs four entry points. Verify they are all available:
+ManusClaw v5.0.0 installs five entry points. Verify they are all available:
 
 ```bash
 manusclaw --help           # Main interactive agent
 manusclaw-server --help    # Server mode (FastAPI/uvicorn)
 manusclaw-cron --help      # Cron scheduler
 manusclaw-multi --help     # Multi-agent orchestrator
+manusclaw-tray --help      # System tray companion (only if [companion] installed)
 ```
 
 ### Test with a simple query
@@ -991,7 +1528,7 @@ If you see a response, ManusClaw is fully operational. If you get an error about
 ### Verify Python dependencies
 
 ```bash
-python3 -c "import manusclaw; print('ManusClaw imports successfully')"
+python3 -c "import manusclaw; print('ManusClaw v5.0.0 imports successfully')"
 ```
 
 ### Verify Playwright (if installed)
@@ -1000,11 +1537,55 @@ python3 -c "import manusclaw; print('ManusClaw imports successfully')"
 python3 -c "from playwright.sync_api import sync_playwright; print('Playwright is working')"
 ```
 
+### Verify optional group dependencies
+
+Run these checks for each optional group you installed:
+
+```bash
+# [voice] group
+python3 -c "import pvporcupine, sounddevice, speech_recognition, pyttsx3; print('Voice dependencies OK')"
+
+# [ssh] group
+python3 -c "import asyncssh; print(f'asyncssh {asyncssh.__version__} OK')"
+
+# [gmail] group
+python3 -c "from googleapiclient.discovery import build; print('Gmail client OK')"
+
+# [matrix] group
+python3 -c "import nio; print(f'matrix-nio {nio.__version__} OK')"
+
+# [companion] group
+python3 -c "
+import sys
+if sys.platform == 'darwin':
+    import rumps; print('rumps (macOS companion) OK')
+else:
+    import pystray; print('pystray (Linux/Windows companion) OK')
+"
+```
+
+### Comprehensive health check
+
+ManusClaw v5.0.0 includes a built-in health check command:
+
+```bash
+manusclaw-doctor
+```
+
+This command checks:
+- Python version (must be 3.11+)
+- All installed dependencies
+- Optional group availability
+- Playwright browser installation
+- Configuration file validity
+- API key presence (without revealing values)
+- Network connectivity to common API endpoints
+
 ---
 
 ## Post-Installation Setup
 
-After verifying that ManusClaw is installed, you need to configure it before first use:
+After verifying that ManusClaw is installed, you need to configure it before first use.
 
 ### 1. Initialize the configuration
 
@@ -1045,7 +1626,41 @@ model = "gpt-4o"
 
 See the [Configuration Guide](configuration.md) for complete details on all configuration options.
 
-### 4. Set up the workspace
+### 4. Configure optional features (v5.0.0)
+
+If you installed optional dependency groups, add their configuration to `config.toml`:
+
+```toml
+# Voice configuration (if [voice] group installed)
+[voice]
+wake_word = "hey manusclaw"
+tts_engine = "elevenlabs"       # or "pyttsx3" for offline
+elevenlabs_voice = "Rachel"
+porcupine_access_key = "${PORCUPINE_ACCESS_KEY}"
+
+# SSH configuration (if [ssh] group installed)
+[ssh]
+known_hosts_file = "~/.ssh/known_hosts"
+default_user = "root"
+
+# Gmail configuration (if [gmail] group installed)
+[gmail]
+credentials_file = "~/.manusclaw/gmail_credentials.json"
+token_file = "~/.manusclaw/gmail_token.json"
+
+# Matrix configuration (if [matrix] group installed)
+[matrix]
+homeserver = "https://matrix.org"
+user_id = "@youruser:matrix.org"
+device_id = "manusclaw-v5"
+
+# Companion configuration (if [companion] group installed)
+[companion]
+autostart = true
+notifications = true
+```
+
+### 5. Set up the workspace
 
 ```bash
 # Create your default workspace
@@ -1056,10 +1671,16 @@ mkdir -p ~/workspace
 # path = "/path/to/your/project"
 ```
 
-### 5. Start using ManusClaw
+### 6. Start using ManusClaw
 
 ```bash
+# Interactive mode
 manusclaw
+
+# Or with a specific entry point
+manusclaw-server    # Web server mode
+manusclaw-tray      # System tray companion (if [companion] installed)
+manusclaw-multi     # Multi-agent orchestrator
 ```
 
 You're now ready to use ManusClaw! Head to the [Usage Guide](usage.md) to learn about all the features and commands available to you.
@@ -1068,51 +1689,128 @@ You're now ready to use ManusClaw! Head to the [Usage Guide](usage.md) to learn 
 
 ## Using the Install Scripts
 
-ManusClaw provides automated install scripts for convenience. These scripts handle prerequisite installation, Python setup, and ManusClaw installation in a single command.
+ManusClaw v5.0.0 provides automated install scripts for convenience. These scripts handle prerequisite installation, Python setup, and ManusClaw installation in a single command.
 
-### Linux / macOS (install.sh)
+### Linux / macOS — install.sh
+
+The `install.sh` script is the recommended way to install ManusClaw on Linux and macOS with a single command.
 
 ```bash
 # Download and run the install script
-curl -fsSL https://raw.githubusercontent.com/The-JDdev/manusclaw/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/The-JDdev/manusclaw/v5.0.0/install.sh | bash
 
 # Or clone and run locally
 git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
+git checkout v5.0.0
 bash install.sh
 ```
 
 The `install.sh` script:
-- Detects your OS and package manager
+- Detects your OS and package manager (apt, dnf, pacman, brew)
 - Installs Python 3.11+ if not already present
-- Installs pip and other dependencies
-- Installs ManusClaw via pip
+- Installs pip and other system dependencies (including portaudio for voice)
+- Installs ManusClaw via pip (with optional `[all-plus]` groups if you pass `--full`)
 - Optionally installs Playwright browsers
-- Performs basic verification
+- Performs basic verification (`manusclaw --version`)
+- Prints a summary of what was installed and what to configure next
 
-### Windows (install.ps1)
+**Script options:**
+
+```bash
+# Install core only (default)
+bash install.sh
+
+# Install with all optional dependencies
+bash install.sh --full
+
+# Skip Playwright browser installation
+bash install.sh --no-playwright
+
+# Install to a specific Python version
+bash install.sh --python 3.12
+
+# Non-interactive mode (for CI/CD)
+bash install.sh --yes
+```
+
+---
+
+### Windows — install.ps1
+
+The `install.ps1` script is the PowerShell equivalent for Windows users.
 
 ```powershell
 # Clone the repository
 git clone https://github.com/The-JDdev/manusclaw.git
 cd manusclaw
+git checkout v5.0.0
 
 # Run the PowerShell install script
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 The `install.ps1` script:
-- Checks for Python 3.11+ and offers to install it if missing
-- Upgrades pip
+- Checks for Python 3.11+ and offers to install it via the official installer if missing
+- Upgrades pip to the latest version
 - Installs ManusClaw and dependencies
 - Installs Playwright browsers
 - Adds manusclaw to PATH if needed
+- Installs optional dependency groups based on user prompts
+
+**Script options:**
+
+```powershell
+# Install with all optional dependencies
+.\install.ps1 -Full
+
+# Skip Playwright
+.\install.ps1 -NoPlaywright
+
+# Non-interactive mode
+.\install.ps1 -Unattended
+```
+
+---
+
+### Termux — setup-termux.sh
+
+The `setup-termux.sh` script is specifically designed for the Termux environment on Android. See also [Termux Installation](#termux-android-installation).
+
+```bash
+git clone https://github.com/The-JDdev/manusclaw.git
+cd manusclaw
+git checkout v5.0.0
+bash setup-termux.sh
+```
+
+The `setup-termux.sh` script:
+- Detects your Termux environment and Android API level
+- Installs all required system packages via `pkg`
+- Installs Python 3.11+ if the bundled version is too old
+- Installs ManusClaw with compatible optional groups (avoids known-broken ones)
+- Configures recommended environment variables for Termux
+- Performs basic verification
+- Sets up `termux-wake-lock` by default
+
+**Script options:**
+
+```bash
+# Install with all groups (some may not work)
+bash setup-termux.sh --full
+
+# Install specific groups only
+bash setup-termux.sh --groups ssh,gmail
+
+# Skip all optional groups (core only)
+bash setup-termux.sh --minimal
+```
 
 ---
 
 ## Using pyenv (Alternative Python Installation)
 
-If your system Python is outdated and you can't or don't want to modify it, `pyenv` is an excellent tool for managing multiple Python versions without needing sudo access:
+If your system Python is outdated and you can't or don't want to modify it, `pyenv` is an excellent tool for managing multiple Python versions without needing sudo access. This is particularly useful on shared servers, CI/CD environments, or older Linux distributions.
 
 ```bash
 # Install pyenv
@@ -1124,18 +1822,163 @@ echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.
 echo 'eval "$(pyenv init -)"' >> ~/.bashrc
 source ~/.bashrc
 
-# Install Python 3.11
+# Install Python 3.11 (minimum for v5.0.0)
 pyenv install 3.11.9
 
+# Or install Python 3.12 (recommended)
+pyenv install 3.12.4
+
 # Set as global default
-pyenv global 3.11.9
+pyenv global 3.12.4
 
 # Verify
 python --version
-# Should show Python 3.11.9
+# Should show Python 3.12.4
 
 # Now install ManusClaw
 pip install manusclaw
+# Or: pip install manusclaw[all-plus]
 ```
 
-This approach is especially useful on shared servers or CI/CD environments where you can't modify the system Python.
+For pyenv on macOS with Apple Silicon, you may need to set additional compiler flags:
+
+```bash
+# Apple Silicon: ensure Homebrew OpenSSL is found
+export LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+pyenv install 3.12.4
+```
+
+---
+
+## Virtual Environments
+
+It is strongly recommended to use a virtual environment when installing ManusClaw from source or when developing. This isolates ManusClaw's dependencies from your system Python.
+
+### Using venv (built-in)
+
+```bash
+# Create a virtual environment
+python3 -m venv ~/manusclaw-env
+
+# Activate it
+source ~/manusclaw-env/bin/activate    # Linux/macOS
+# Or: ~/manusclaw-env\Scripts\activate  # Windows
+
+# Install ManusClaw inside the venv
+pip install manusclaw[all-plus]
+
+# When done, deactivate
+deactivate
+```
+
+### Using virtualenvwrapper (optional)
+
+```bash
+# Install virtualenvwrapper
+pip install virtualenvwrapper
+
+# Add to shell profile
+echo 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' >> ~/.bashrc
+echo 'source ~/.local/bin/virtualenvwrapper.sh' >> ~/.bashrc
+source ~/.bashrc
+
+# Create a virtual environment
+mkvirtualenv manusclaw-env
+
+# Install ManusClaw
+pip install manusclaw[all-plus]
+
+# Switch to the environment later
+workon manusclaw-env
+```
+
+### Using conda (optional)
+
+```bash
+# Create a conda environment with Python 3.11+
+conda create -n manusclaw python=3.11 -y
+conda activate manusclaw
+
+# Install ManusClaw
+pip install manusclaw[all-plus]
+```
+
+> **Note:** ManusClaw is not distributed via conda-forge. Install via pip even within a conda environment.
+
+---
+
+## Upgrading from v4.0.0
+
+If you are upgrading from ManusClaw v4.0.0 to v5.0.0, follow these steps:
+
+### Step 1: Backup your configuration
+
+```bash
+cp -r ~/.manusclaw ~/.manusclaw.backup-v4
+```
+
+### Step 2: Upgrade the package
+
+```bash
+# PyPI upgrade (core)
+pip install --upgrade manusclaw
+
+# Or with all new optional dependencies
+pip install --upgrade manusclaw[all-plus]
+```
+
+### Step 3: Review configuration changes
+
+v5.0.0 introduces new configuration sections. Compare your existing `config.toml` with the new defaults:
+
+```bash
+# See the new default config
+manusclaw config show-defaults > /tmp/default-config.toml
+diff ~/.manusclaw/config.toml /tmp/default-config.toml
+```
+
+New configuration sections in v5.0.0:
+- `[voice]` — wake word, TTS engine, voice selection
+- `[ssh]` — remote execution settings
+- `[gmail]` — email integration settings
+- `[matrix]` — chat integration settings
+- `[companion]` — system tray app settings
+
+### Step 4: Run the health check
+
+```bash
+manusclaw-doctor
+```
+
+This will identify any missing dependencies or configuration issues after the upgrade.
+
+### Step 5: Verify version
+
+```bash
+manusclaw --version
+# Expected: ManusClaw v5.0.0
+```
+
+### Breaking changes from v4.0.0
+
+| Area | Change | Action Required |
+|------|--------|----------------|
+| Python version | Minimum raised from 3.11 (recommended) to **3.11 (required)** | Upgrade Python if using 3.10 |
+| Docker Compose | `version: "3.8"` removed | Use `docker compose` (v2) without version key |
+| CLI entry points | Added `manusclaw-tray` (for companion app) | No action needed |
+| Configuration | New `[voice]`, `[ssh]`, `[gmail]`, `[matrix]`, `[companion]` sections | Add to config.toml if using those features |
+| Dependencies | `asyncssh`, `pvporcupine`, `sounddevice`, `speech-recognition`, `pyttsx3`, `elevenlabs`, `matrix-nio`, `pystray`, `rumps`, `google-api-python-client` are now optional | Install via `[all-plus]` or individual groups |
+
+---
+
+## Next Steps
+
+After completing the installation, proceed to these guides:
+
+1. **[Configuration Guide](configuration.md)** — Set up LLM providers, API keys, and optional features
+2. **[Usage Guide](usage.md)** — Learn ManusClaw commands, modes, and workflows
+3. **[Features Guide](features.md)** — Explore v5.0.0 features including voice, SSH, Gmail, Matrix, and companion
+4. **[Deployment Guide](deployment.md)** — Production deployment with systemd, Nginx, SSL, and Docker
+5. **[Troubleshooting Guide](troubleshooting.md)** — Common issues and solutions
