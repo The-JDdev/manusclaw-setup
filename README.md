@@ -13,17 +13,43 @@
 
 ### _From Zero to Autonomous AI Beast in Minutes_
 
-**Production-grade documentation for ManusClaw v5.0.0 — the omnichannel autonomous AI agent framework.**
+**Production-grade installation and setup documentation for ManusClaw v5.0.0 — the omnichannel autonomous AI agent framework.**
 
 <p>
-  <a href="https://github.com/The-JDdev/ManusClaw">
-    <img src="https://img.shields.io/badge/Source_Code-The--JDdev%2FManusClaw-181717?style=for-the-badge&logo=github&logoColor=white" alt="Source">
+  <a href="https://github.com/ManusClawAI/manusclaw">
+    <img src="https://img.shields.io/badge/Core_Engine-ManusClawAI%2Fmanusclaw-181717?style=for-the-badge&logo=github&logoColor=white" alt="Core Engine">
+  </a>
+  &nbsp;
+  <a href="https://github.com/The-JDdev/manusclaw-setup">
+    <img src="https://img.shields.io/badge/This_Repo-Setup_%26_Docs-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Setup Repo">
   </a>
   &nbsp;
   <a href="https://github.com/The-JDdev">
     <img src="https://img.shields.io/badge/Built_by-The--JDdev_(SHS_Lab)-FFFFFF?style=for-the-badge&logo=github&logoColor=181717" alt="Developer">
   </a>
 </p>
+
+---
+
+## Repository Architecture
+
+> **IMPORTANT — READ THIS FIRST**: The ManusClaw ecosystem is split across TWO repositories. Understanding this structure is essential for installation.
+
+| Repository | URL | Purpose |
+|---|---|---|
+| **Core Engine** | [`ManusClawAI/manusclaw`](https://github.com/ManusClawAI/manusclaw) | Source code, agent logic, tools, LLM providers, channels, server, voice, sandbox — **everything that runs** |
+| **Setup & Docs** | [`The-JDdev/manusclaw-setup`](https://github.com/The-JDdev/manusclaw-setup) (this repo) | Installation guides, configuration reference, platform-specific tutorials, deployment docs |
+
+```
+  WHAT YOU CLONE          WHERE IT LIVES         WHAT IT DOES
+  ─────────────────    ────────────────────    ────────────────────────
+  manusclaw/            ManusClawAI/manusclaw     The AI agent engine itself
+  manusclaw-setup/      The-JDdev/manusclaw-setup The installation guide you're reading
+```
+
+**In short**: You clone the **Core Engine** (`ManusClawAI/manusclaw`) to run ManusClaw. This repository (`manusclaw-setup`) exists to guide you through that process with production-grade documentation.
+
+---
 
 ---
 
@@ -39,6 +65,8 @@
 ```
 
 </div>
+
+---
 
 ---
 
@@ -281,7 +309,7 @@ This is the fastest path from zero to a working ManusClaw agent:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/The-JDdev/ManusClaw.git && cd ManusClaw
+git clone https://github.com/ManusClawAI/manusclaw.git && cd ManusClaw
 
 # 2. Install the core framework
 pip install -e .
@@ -317,7 +345,7 @@ The pip method installs ManusClaw as an editable package, meaning code changes t
 
 ```bash
 # Clone
-git clone https://github.com/The-JDdev/ManusClaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd ManusClaw
 
 # Core install (CLI + basic tools + MockLLM)
@@ -342,7 +370,7 @@ ManusClaw includes platform-specific installer scripts that handle Python versio
 
 **Linux / macOS**:
 ```bash
-git clone https://github.com/The-JDdev/ManusClaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd ManusClaw
 chmod +x install.sh
 ./install.sh
@@ -350,14 +378,14 @@ chmod +x install.sh
 
 **Windows (PowerShell)**:
 ```powershell
-git clone https://github.com/The-JDdev/ManusClaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd ManusClaw
 .\install.ps1
 ```
 
 **Android (Termux)**:
 ```bash
-git clone https://github.com/The-JDdev/ManusClaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd ManusClaw
 chmod +x setup-termux.sh
 ./setup-termux.sh
@@ -369,7 +397,7 @@ Docker deployment provides isolated, reproducible environments. The Dockerfile u
 
 ```bash
 # Clone (if not already)
-git clone https://github.com/The-JDdev/ManusClaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd ManusClaw
 
 # Server mode — HTTP/WS server on port 8765
@@ -396,7 +424,7 @@ Run ManusClaw in a free cloud environment with GPU access. See the [Colab Guide]
 
 ```bash
 # In a Colab cell:
-!git clone https://github.com/The-JDdev/ManusClaw.git
+!git clone https://github.com/ManusClawAI/manusclaw.git
 %cd ManusClaw
 !pip install -e ".[all]"
 ```
@@ -807,7 +835,7 @@ Setting `APP_ENV=test` forces ManusClaw into test mode:
 APP_ENV=test pytest
 ```
 
-> **See also**: [Full Configuration Guide](docs/configuration.md) | [.env.example](https://github.com/The-JDdev/ManusClaw/blob/main/.env.example)
+> **See also**: [Full Configuration Guide](docs/configuration.md) | [.env.example](https://github.com/ManusClawAI/manusclaw/blob/main/.env.example)
 
 ---
 
@@ -1711,7 +1739,7 @@ ManusClaw is licensed under the **Modified MIT License**. This means:
 | **Commercial / SaaS** | **YES** | Must credit: *"This product is built upon ManusClaw, created by The-JDdev (SHS Lab)."* |
 | **Name / Trademark Use** | **Prohibited** | Cannot use "ManusClaw", "The-JDdev", or "SHS Lab" to market derived products without written permission |
 
-See the [LICENSE](https://github.com/The-JDdev/ManusClaw/blob/main/LICENSE) file for full legal text.
+See the [LICENSE](https://github.com/ManusClawAI/manusclaw/blob/main/LICENSE) file for full legal text.
 
 ---
 

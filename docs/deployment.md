@@ -56,7 +56,7 @@ Docker is the recommended deployment method because it ensures a consistent, iso
 
 ```bash
 # Clone the repository
-git clone https://github.com/The-JDdev/manusclaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd manusclaw
 
 # Build the image

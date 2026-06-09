@@ -204,7 +204,7 @@ pip install manusclaw
 If pip installation doesn't work, try building from source:
 
 ```bash
-git clone https://github.com/The-JDdev/manusclaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd manusclaw
 pip install -e .
 ```
@@ -217,7 +217,7 @@ ManusClaw includes a dedicated `setup-termux.sh` script (previously `setup_termu
 
 ```bash
 # Clone the repository
-git clone https://github.com/The-JDdev/manusclaw.git
+git clone https://github.com/ManusClawAI/manusclaw.git
 cd manusclaw
 
 # Run the Termux setup script
