@@ -2,7 +2,7 @@
 
 This guide covers every platform and method for installing ManusClaw v5.0.0. Each section is self-contained so you can jump directly to your platform. If you encounter any issues, consult the [Troubleshooting Guide](troubleshooting.md) before opening a GitHub issue.
 
-**What's new in v5.0.0:** Voice I/O (Porcupine + ElevenLabs TTS), SSH remote execution, Gmail integration, Matrix messaging, system tray companions, multi-agent Docker Compose profiles, optional dependency groups, and an expanded dependency tree. See the [Changelog](https://github.com/ManusClawAI/manusclaw/releases/tag/v5.0.0) for the full list of changes.
+**What's new in v5.0.0:** Voice I/O (Porcupine + ElevenLabs TTS), SSH remote execution, Gmail integration, Matrix messaging, system tray companions, multi-agent Docker Compose profiles, optional dependency groups, and an expanded dependency tree. See the [Changelog](https://github.com/ManusAgents/manusclaw/releases/tag/v5.0.0) for the full list of changes.
 
 ---
 
@@ -347,7 +347,7 @@ Installing from source gives you access to the latest development changes before
 
 ```bash
 # Clone the repository
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 
 # Install in editable mode (core only)
@@ -889,7 +889,7 @@ docker run -it --rm \
 
 ```bash
 # Clone the repository
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 
 # Build the image
@@ -1162,7 +1162,7 @@ pip install manusclaw[all-plus]
 ManusClaw v5.0.0 includes a dedicated Termux setup script (`setup-termux.sh`) that handles the entire installation process, including dependency resolution:
 
 ```bash
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 bash setup-termux.sh
 ```
@@ -1697,10 +1697,10 @@ The `install.sh` script is the recommended way to install ManusClaw on Linux and
 
 ```bash
 # Download and run the install script
-curl -fsSL https://raw.githubusercontent.com/ManusClawAI/manusclaw/v5.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ManusAgents/manusclaw/v5.0.0/install.sh | bash
 
 # Or clone and run locally
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 git checkout v5.0.0
 bash install.sh
@@ -1742,7 +1742,7 @@ The `install.ps1` script is the PowerShell equivalent for Windows users.
 
 ```powershell
 # Clone the repository
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 git checkout v5.0.0
 
@@ -1778,7 +1778,7 @@ The `install.ps1` script:
 The `setup-termux.sh` script is specifically designed for the Termux environment on Android. See also [Termux Installation](#termux-android-installation).
 
 ```bash
-git clone https://github.com/ManusClawAI/manusclaw.git
+git clone https://github.com/ManusAgents/manusclaw.git
 cd manusclaw
 git checkout v5.0.0
 bash setup-termux.sh
